@@ -16,6 +16,7 @@
 //Command for launching "Meldis" - works with Drake Visualizer API. Maybe I'm supposed to use Meshcat directly?
 //env PYTHONPATH=${PYTHONPATH}:/opt/drake/lib/python3.10/site-packages python3 -m pydrake.visualization.meldis -w
 
+//Debugging hack for getting to private members of MultibodyPlant
 namespace drake {
 namespace multibody {
 template<>
@@ -56,14 +57,17 @@ int main() {
 	multibody::Parser parser(&plant);
 	multibody::ModelInstanceIndex plantIndex = parser.AddModelFromFile("../sdf/robot_2d.sdf");
 	//plant.AddJoint<multibody::QuaternionFloatingJoint>("Floating joint", plant.world_body(), {}, plant.GetBodyByName("base_link"), {});
-	plant.Finalize();       //Processes model after all physical elements added to get it ready for computation
 
-	//Load ground plane
-	multibody::MultibodyPlant<double>& groundPlane = *builder.AddSystem<multibody::MultibodyPlant<double>>(timestep);
-	connectToSceneGraph(groundPlane, sceneGraph, builder);
-	multibody::Parser parser2(&groundPlane);      //You really have to make a new one of these for every model you load?
-	multibody::ModelInstanceIndex groundPlaneIndex = parser2.AddModelFromFile("../sdf/ground_plane.sdf");
-	groundPlane.Finalize();
+	//Drake crashed at time of contact when a ground plane was added through an SDF rather than this code.
+	//No idea why. It seems multiple plants like that are not expected based on the API weirdness
+	//Code from Atlas example
+	const double static_friction = 1.0;
+	const Vector4<double> groundColor(0.5, 0.5, 0.5, 1.0);
+	plant.RegisterVisualGeometry(plant.world_body(), math::RigidTransformd(), geometry::HalfSpace(), "GroundVisualGeometry", groundColor);
+	const multibody::CoulombFriction<double> ground_friction(static_friction, static_friction);
+	plant.RegisterCollisionGeometry(plant.world_body(), math::RigidTransformd(), geometry::HalfSpace(), "GroundCollisionGeometry", ground_friction);
+
+	plant.Finalize();       //Processes model after all physical elements added to get it ready for computation
 
 	auto zeroTorque = builder.AddSystem<systems::ConstantVectorSource<double>>(Eigen::Vector3d::Zero());
 	builder.Connect(zeroTorque->get_output_port(), plant.get_actuation_input_port());
@@ -76,9 +80,6 @@ int main() {
 	//systems::State& plantState = diagram->GetMutableSubsystemState(plant, diagramContext.get());
 	systems::Context<double>& plantContext = diagram->GetMutableSubsystemContext(plant, diagramContext.get());
 
-	multibody::MultibodyPlant<float> accessor;
-	accessor.debug(groundPlane);
-
 	//std::cout << "State size: " << plantContext.get_state().get_discrete_state().size() << "\n";
 	VectorX<double> posVec = plant.GetPositions(plantContext, plantIndex);
 	std::cout << "Position vector size: " << posVec.rows() << "\n";
@@ -88,7 +89,7 @@ int main() {
 	multibody::PrismaticJoint<double>& springJoint = plant.GetMutableJointByName<multibody::PrismaticJoint>("spring");
 
 	shoulderJoint.set_angle(&plantContext, 0.0);
-	elbowJoint.set_angle(&plantContext, 0.2);
+	elbowJoint.set_angle(&plantContext, 0.0);
 	springJoint.set_translation(&plantContext, 0.0);
 
 	//Eigen::Vector3d pos;
@@ -96,12 +97,12 @@ int main() {
 	//plant.SetPositions(&plantContext, pos);
 
 	Eigen::Vector3d initialPos;
-	initialPos << 0.0, 0.0, 0.5;
+	initialPos << 0.0, 0.0, 0.35;
 	math::RigidTransformd initialTransform{initialPos};
 	plant.SetFreeBodyPoseInWorldFrame(&plantContext, plant.GetBodyByName("base_link"), initialTransform);
 
 	systems::Simulator<double> sim(*diagram, std::move(diagramContext));        //Why is std::move needed?
-	sim.set_target_realtime_rate(1.0);      //Don't run as fast as possible
+	sim.set_target_realtime_rate(0.25);      //Don't run as fast as possible
 	sim.Initialize();
 	sim.AdvanceTo(10.0);
 }
