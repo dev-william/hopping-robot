@@ -2,6 +2,19 @@
 <sdf version="1.7">
 	<model name="HoppingRobot2d">
 		<link name="base_link">
+			<pose>0 0 0 0 0 0</pose>
+			<inertial>
+				<pose>0 0 0 0 0 0</pose>
+				<mass>1.4</mass>
+				<inertia>
+					<ixx>0.0023</ixx>
+					<ixy>0</ixy>
+					<ixz>0</ixz>
+					<iyy>0.0023</iyy>
+					<iyz>0</iyz>
+					<izz>0.0023</izz>
+				</inertia>
+			</inertial>
 			<collision name="base_link_collision">
 				<geometry>
 					<box>
@@ -22,14 +35,14 @@
 			<pose>0 0 0 0 0 0</pose>
 			<inertial>
 				<pose>0 0 -0.1 0 0 0</pose>
-				<mass>1</mass>
+				<mass>0.5</mass>
 				<inertia>
-					<ixx>1</ixx>
+					<ixx>0.0017</ixx>
 					<ixy>0</ixy>
 					<ixz>0</ixz>
-					<iyy>0.083</iyy>
+					<iyy>0.0017</iyy>
 					<iyz>0</iyz>
-					<izz>1</izz>
+					<izz>0.00005625</izz>
 				</inertia>
 			</inertial>
 			<collision name="upper_link_collision">
@@ -71,14 +84,14 @@
 			<pose relative_to="upper_link">0 0 -0.2 0 0 0</pose>
 			<inertial>
 				<pose>0 0 -0.05 0 0 0</pose>
-				<mass>1</mass>
+				<mass>0.3</mass>
 				<inertia>
-					<ixx>1</ixx>
+					<ixx>0.00075</ixx>
 					<ixy>0</ixy>
 					<ixz>0</ixz>
-					<iyy>0.33</iyy>
+					<iyy>0.00075</iyy>
 					<iyz>0</iyz>
-					<izz>1</izz>
+					<izz>0.000005</izz>
 				</inertia>
 			</inertial>
 			<collision name="lower_link_collision">
@@ -120,14 +133,14 @@
 			<pose relative_to="lower_link">0 0.0 -0.1 0 0 0</pose>
 			<inertial>
 				<pose>0 0 -0.05 0 0 0</pose>
-				<mass>1</mass>
+				<mass>0.3</mass>
 				<inertia>
-					<ixx>1</ixx>
+					<ixx>0.00075</ixx>
 					<ixy>0</ixy>
 					<ixz>0</ixz>
-					<iyy>0.33</iyy>
+					<iyy>0.00075</iyy>
 					<iyz>0</iyz>
-					<izz>1</izz>
+					<izz>0.000005</izz>
 				</inertia>
 			</inertial>
 			<collision name="foot_link_collision">
@@ -159,10 +172,10 @@
 					<upper>0.1</upper>
 				</limit>
 				<dynamics>
-					<damping>0.1</damping>
+					<damping>0.2</damping>
 					<friction>0</friction>
 					<spring_reference>0</spring_reference>
-					<spring_stiffness>500</spring_stiffness>
+					<spring_stiffness>800</spring_stiffness>
 				</dynamics>
 			</axis>
 		</joint>
