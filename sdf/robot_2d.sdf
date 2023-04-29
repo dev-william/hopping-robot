@@ -64,10 +64,10 @@
 				</geometry>
 			</visual>
 		</link>
-		<joint name="shoulder" type="revolute">
+		<joint name="shoulder" type="fixed">
 			<child>upper_link</child>
 			<parent>base_link</parent>
-			<axis>
+			<!-- <axis>
 				<xyz expressed_in="__model__">0 1 0</xyz>
 				<limit>
 				</limit>
@@ -77,7 +77,7 @@
 					<spring_reference>0</spring_reference>
 					<spring_stiffness>0</spring_stiffness>
 				</dynamics>
-			</axis>
+			</axis> -->
 		</joint>
 
 		<link name="lower_link">
@@ -119,6 +119,9 @@
 			<axis>
 				<xyz expressed_in="__model__">0 1 0</xyz>
 				<limit>
+					<!-- 2.36 = 3/4*pi = 135 degrees-->
+					<lower>-2.36</lower>
+					<upper>2.36</upper>
 				</limit>
 				<dynamics>
 					<damping>0.1</damping>
@@ -144,12 +147,11 @@
 				</inertia>
 			</inertial>
 			<collision name="foot_link_collision">
-				<pose>0 0 -0.05 0 0 0</pose>
+				<pose>0 0 -0.1 0 0 0</pose>
 				<geometry>
-					<cylinder>
-						<length>0.1</length>
-						<radius>0.005</radius>
-					</cylinder>
+					<sphere>
+						<radius>0.01</radius>
+					</sphere>
 				</geometry>
 			</collision>
 			<visual name="foot_link_visual">
@@ -161,6 +163,14 @@
 					</cylinder>
 				</geometry>
 			</visual>
+			<visual name="foot_sphere_visual">
+				<pose>0 0 -0.1 0 0 0</pose>
+				<geometry>
+					<sphere>
+						<radius>0.01</radius>
+					</sphere>
+				</geometry>
+			</visual>
 		</link>
 		<joint name="spring" type="prismatic">
 			<child>foot_link</child>
@@ -168,14 +178,14 @@
 			<axis>
 				<xyz expressed_in="__model__">0 0 1</xyz>
 				<limit>
-					<lower>-0.1</lower>
-					<upper>0.1</upper>
+					<lower>-0.15</lower>
+					<upper>0.15</upper>
 				</limit>
 				<dynamics>
 					<damping>0.2</damping>
 					<friction>0</friction>
 					<spring_reference>0</spring_reference>
-					<spring_stiffness>800</spring_stiffness>
+					<spring_stiffness>1000</spring_stiffness>
 				</dynamics>
 			</axis>
 		</joint>
