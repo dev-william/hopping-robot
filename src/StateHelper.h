@@ -9,6 +9,7 @@ using namespace drake;
 class StateHelper {
 public:
 	StateHelper(multibody::MultibodyPlant<double>& plantIn, bool is3dIn) : plant(plantIn), is3d(is3dIn) {
+		posDim = (is3d ? 3 : 2);
 		elbowJoint = &plant.GetMutableJointByName<multibody::RevoluteJoint>("elbow");
 		springJoint = &plant.GetMutableJointByName<multibody::PrismaticJoint>("spring");
 		if(is3d) {
@@ -31,10 +32,21 @@ public:
 	}
 	multibody::MultibodyPlant<double>& plant;
 	bool is3d;
+	int posDim;
 	multibody::RevoluteJoint<double>* shoulderJoint = nullptr;
 	multibody::RevoluteJoint<double>* elbowJoint = nullptr;
 	const multibody::JointActuator<double>* elbowActuator = nullptr;
 	multibody::PrismaticJoint<double>* springJoint = nullptr;
 	const multibody::JointActuator<double>* springActuator = nullptr;
 	multibody::Joint<double>* floatingJoint = nullptr;
+
+	int floatingVelStateIndex() {
+		return plant.num_positions() + floatingJoint->velocity_start();
+	}
+	int floatingVzStateIndex() {
+		return plant.num_positions() + floatingJoint->velocity_start() + posDim - 1;
+	}
+	int springVelStateIndex() {
+		return plant.num_positions() + springJoint->velocity_start();
+	}
 };

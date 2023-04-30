@@ -15,13 +15,13 @@
 					<izz>0.0023</izz>
 				</inertia>
 			</inertial>
-			<collision name="base_link_collision">
+			<!-- <collision name="base_link_collision">
 				<geometry>
 					<box>
 						<size>0.1 0.1 0.1</size>
 					</box>
 				</geometry>
-			</collision>
+			</collision> -->
 			<visual name="base_link_visual">
 				<geometry>
 					<box>
@@ -45,7 +45,7 @@
 					<izz>0.00005625</izz>
 				</inertia>
 			</inertial>
-			<collision name="upper_link_collision">
+			<!-- <collision name="upper_link_collision">
 				<pose>0 0 -0.1 0 0 0</pose>
 				<geometry>
 					<cylinder>
@@ -53,7 +53,7 @@
 						<radius>0.015</radius>
 					</cylinder>
 				</geometry>
-			</collision>
+			</collision> -->
 			<visual name="upper_link_visual">
 				<pose>0 0 -0.1 0 0 0</pose>
 				<geometry>
@@ -94,7 +94,7 @@
 					<izz>0.000005</izz>
 				</inertia>
 			</inertial>
-			<collision name="lower_link_collision">
+			<!-- <collision name="lower_link_collision">
 				<pose>0 0 -0.05 0 0 0</pose>
 				<geometry>
 					<cylinder>
@@ -102,7 +102,7 @@
 						<radius>0.01</radius>
 					</cylinder>
 				</geometry>
-			</collision>
+			</collision> -->
 			<visual name="lower_link_visual">
 				<pose>0 0 -0.05 0 0 0</pose>
 				<geometry>
