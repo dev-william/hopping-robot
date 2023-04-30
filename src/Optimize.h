@@ -2,12 +2,8 @@
 
 #include "drake/common/trajectories/piecewise_polynomial.h"
 #include "StateHelper.h"
+#include "Utils.h"
 #include <iostream>
-
-struct Traj {
-	drake::trajectories::PiecewisePolynomial<double> x;
-	drake::trajectories::PiecewisePolynomial<double> u;
-};
 
 double fallTime(double height, double gravity) {
 	return std::sqrt(-height * 2.0 / gravity);

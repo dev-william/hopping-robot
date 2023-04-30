@@ -18,6 +18,7 @@
 #include "RobotSystem.h"
 #include "StateHelper.h"
 #include "Optimize.h"
+#include "Utils.h"
 
 //Command for launching "Meldis" - works with Drake Visualizer API. Maybe I'm supposed to use Meshcat directly?
 //env PYTHONPATH=${PYTHONPATH}:/opt/drake/lib/python3.10/site-packages python3 -m pydrake.visualization.meldis -w
@@ -74,7 +75,7 @@ trajectories::PiecewisePolynomial<double> optimize() {
 	double maxSpringForce = 5.0;
 	dirCol.AddConstraintToAllKnotPoints(u[help.elbowActuator->input_start()] <= maxElbowTorque);
 	dirCol.AddConstraintToAllKnotPoints(u[help.elbowActuator->input_start()] >= -maxElbowTorque);
-	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] <= maxSpringForce);		//Not actually sure which input is which
+	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] <= maxSpringForce);
 	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] >= -maxSpringForce);
 
 	Traj initial = makeInitialGuess(help, Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.0, 0.45}}, 0.4);
@@ -130,26 +131,6 @@ trajectories::PiecewisePolynomial<double> optimize2() {
 	return {};
 }
 
-void playTrajectory(trajectories::PiecewisePolynomial<double>& stateTraj, systems::Diagram<double>& diagram, multibody::MultibodyPlant<double>* plant) {
-	std::unique_ptr<systems::Context<double>> diagramContext = diagram.CreateDefaultContext();
-	systems::Context<double>& plantContext = diagram.GetMutableSubsystemContext(*plant, diagramContext.get());
-
-	int frameCount = 100;
-	for(int i = 0; i < frameCount; ++i) {
-		double t = ((double) i / (double) frameCount) * (stateTraj.end_time() - stateTraj.start_time()) + stateTraj.start_time();
-		auto x = stateTraj.value(t);
-		Eigen::VectorXd pos = x.reshaped()(Eigen::seqN(0, plant->num_positions()));
-		plant->SetPositions(&plantContext, pos);
-		diagram.ForcedPublish(*diagramContext);
-		double z = pos[1];
-		std::cout << z << "\n";
-		std::this_thread::sleep_for(chrono::milliseconds(33));		//Drake visualizer does not have anything built in for animations
-		if(i == 0) {
-			std::this_thread::sleep_for(chrono::seconds(3));
-		}
-	}
-}
-
 int main() {
 	double timestep = 0.001;        //If 0.0, then system is continuous
 	bool use3d = false;
@@ -184,7 +165,7 @@ int main() {
 		cin.get();
 		std::this_thread::sleep_for(chrono::seconds(2));
 
-		playTrajectory(stateTraj, *sys.diagram, sys.plant);
+		playTrajectory(stateTraj, sys);
 
 		//viz.StopRecording();
 		//viz.PublishRecording();
