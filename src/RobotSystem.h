@@ -7,6 +7,7 @@
 class RobotSystem {
 public:
 	RobotSystem(double timestep, bool use3d, bool less_collision, bool pinned);
+	void plantFinalize();		//Optional but certain actions (like addZeroInput()) need the plant to be finalized first
 	void finalize();		//Must be called after constructor
 
 	//Call these functions before calling finalize()

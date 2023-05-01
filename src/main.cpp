@@ -35,6 +35,10 @@ trajectories::PiecewisePolynomial<double> optimize() {
 
 	RobotSystem sys(timestep, use3d, true, false);
 
+	sys.plant->set_contact_model(multibody::ContactModel::kPoint);
+	//sys.plant->set_penetration_allowance(0.005);		//Default value unclear - could be .001 but docs have comment about it being automatically determined
+	sys.plantFinalize();
+
 	systems::InputPortIndex exportedInputIndex = sys.builder.ExportInput(sys.plant->get_actuation_input_port(), "exported_input");		//Give dircol access to plant input
 
 	sys.finalize();
@@ -44,7 +48,7 @@ trajectories::PiecewisePolynomial<double> optimize() {
 	int numTimeSamples = 80;
 	double stepDuration = horizon / numTimeSamples;
 	//DirectTranscription dirTran(&plant, plantContext, numTimeSamples, plant.get_actuation_input_port(modelIndex).get_index());	//Plant or diagram? sceneGraph needed for collisions
-	DirectCollocation dirCol(sys.diagram.get(), *sys.diagramContext, numTimeSamples, stepDuration, stepDuration, exportedInputIndex, true);
+	DirectCollocation dirCol(sys.diagram.get(), *sys.diagramContext, numTimeSamples, stepDuration*0.9, stepDuration*1.1, exportedInputIndex, true);
 
 	solvers::MathematicalProgram& mp = dirCol.prog();
 	dirCol.AddEqualTimeIntervalsConstraints();
@@ -78,7 +82,8 @@ trajectories::PiecewisePolynomial<double> optimize() {
 	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] <= maxSpringForce);
 	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] >= -maxSpringForce);
 
-	Traj initial = makeInitialGuess(help, Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.0, 0.45}}, horizon);
+	FootstepGuesser guesser(Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.0, 0.45}}, horizon);
+	Traj initial = guesser.makeFullGuess(true, help);
 	dirCol.SetInitialTrajectory(initial.u, initial.x);
 
 
@@ -104,15 +109,13 @@ trajectories::PiecewisePolynomial<double> optimize() {
 	return dirCol.ReconstructStateTrajectory(res);
 }
 
-trajectories::PiecewisePolynomial<double> optimize2() {
+trajectories::PiecewisePolynomial<double> optimizeHybrid() {
 	using namespace planning::trajectory_optimization;
 
 	double timestep = 0.0;        //If 0.0, then system is continuous
 	bool use3d = false;
 
 	RobotSystem sys(timestep, use3d, true, false);
-
-	systems::InputPortIndex exportedInputIndex = sys.builder.ExportInput(sys.plant->get_actuation_input_port(), "exported_input");		//Give dircol access to plant input
 
 	sys.finalize();
 
@@ -124,7 +127,7 @@ trajectories::PiecewisePolynomial<double> optimize2() {
 			double horizon = 0.1;
 			int numTimeSamples = 20;
 			double stepDuration = horizon / numTimeSamples;
-			DirectCollocation dirCol(sys.plant, *sys.plantContext, numTimeSamples, stepDuration, stepDuration, exportedInputIndex, true, &mp);
+			DirectCollocation dirCol(sys.plant, *sys.plantContext, numTimeSamples, stepDuration, stepDuration, systems::InputPortSelection::kUseFirstInputIfItExists, true, &mp);
 		}
 	}
 
@@ -134,9 +137,10 @@ trajectories::PiecewisePolynomial<double> optimize2() {
 int main() {
 	double timestep = 0.001;        //If 0.0, then system is continuous
 	bool use3d = false;
-	bool pinned = true;
+	bool pinned = false;
 
 	RobotSystem sys(timestep, use3d, false, pinned);
+	sys.plantFinalize();
 	sys.addZeroInput();
 
 	//std::shared_ptr<geometry::Meshcat> meshcat = std::make_shared<geometry::Meshcat>();
@@ -149,13 +153,11 @@ int main() {
 	systems::Context<double>& plantContext = *sys.plantContext;
 	StateHelper help(*sys.plant, use3d);
 
-	//std::cout << "State size: " << plantContext.get_state().get_discrete_state().size() << "\n";
-	VectorX<double> posVec = sys.plant->GetPositions(plantContext, sys.modelIndex);
-	std::cout << "Position vector size: " << posVec.rows() << "\n";
 
-	/*trajectories::PiecewisePolynomial<double> stateTraj = optimize();
-	//Traj initialGuess = makeInitialGuess(help, Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.5, 0.45}}, 2.0);
-	//trajectories::PiecewisePolynomial<double> stateTraj = initialGuess.x;
+	//trajectories::PiecewisePolynomial<double> stateTraj = optimize();
+	FootstepGuesser guesser(Eigen::VectorXd{{0.0, 0.55}}, Eigen::VectorXd{{0.5, 0.55}}, 2.0);
+	Traj initialGuess = guesser.makeFullGuess(false, help);
+	trajectories::PiecewisePolynomial<double> stateTraj = initialGuess.x;
 	yaml::SaveYamlFile("traj.yaml", stateTraj);
 
 	//trajectories::PiecewisePolynomial<double> stateTrajLoaded = yaml::LoadYamlFile<trajectories::PiecewisePolynomial<double>>("traj.yaml");
@@ -170,13 +172,13 @@ int main() {
 
 		//viz.StopRecording();
 		//viz.PublishRecording();
-	}*/
+	}
 
 
 
 	//Simulate uncontrolled robot
 	//help.shoulderJoint->set_angle(&plantContext, 0.0);
-	help.elbowJoint->set_angle(&plantContext, 0.02);
+	/*help.elbowJoint->set_angle(&plantContext, 0.02);
 	help.springJoint->set_translation(&plantContext, 0.0);
 
 	Eigen::Vector3d initialPos;
@@ -199,5 +201,5 @@ int main() {
 	systems::Simulator<double> sim(*sys.diagram, std::move(sys.diagramContext));
 	sim.set_target_realtime_rate(0.5);
 	sim.Initialize();
-	sim.AdvanceTo(10.0);
+	sim.AdvanceTo(10.0);*/
 }

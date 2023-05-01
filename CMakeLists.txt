@@ -34,7 +34,7 @@ find_package(drake CONFIG REQUIRED PATHS /opt/drake)
 
 #add_subdirectory(src)
 
-add_executable(main src/main.cpp src/RobotSystem.cpp src/Utils.cpp)
+add_executable(main src/main.cpp src/RobotSystem.cpp src/Utils.cpp src/Optimize.cpp)
 target_link_libraries(main drake::drake)
 
 add_executable(replay src/replay.cpp src/RobotSystem.cpp src/Utils.cpp)

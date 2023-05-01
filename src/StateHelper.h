@@ -50,13 +50,23 @@ public:
 	multibody::Joint<double>* floatingJoint = nullptr;
 	multibody::Joint<double>* pinJoint = nullptr;
 
-	int floatingVelStateIndex() {
+	int floatingPzStateIndex() const {
+		return floatingJoint->position_start() + posDim - 1;
+	}
+	int floatingVelStateIndex() const {
 		return plant.num_positions() + floatingJoint->velocity_start();
 	}
-	int floatingVzStateIndex() {
+	int floatingVzStateIndex() const {
 		return plant.num_positions() + floatingJoint->velocity_start() + posDim - 1;
 	}
-	int springVelStateIndex() {
+	int springVelStateIndex() const {
 		return plant.num_positions() + springJoint->velocity_start();
+	}
+
+	int stateSize() const {
+		return plant.num_multibody_states();
+	}
+	Eigen::VectorXd getDefaultState() const {
+		return Eigen::VectorXd::Zero(stateSize());		//Todo: support quaternion in 3d case
 	}
 };

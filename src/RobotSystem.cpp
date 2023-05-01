@@ -16,10 +16,15 @@ RobotSystem::RobotSystem(double timestep, bool use3d, bool less_collision, bool 
 	createRobotPlant(builder, timestep, use3d, less_collision, pinned);
 
 	addGroundPlane();
-	plant->Finalize();		//Processes model after all physical elements added to get it ready for computation
+}
+
+void RobotSystem::plantFinalize() {
+	plant->Finalize();
 }
 
 void RobotSystem::finalize() {
+	if(!plant->is_finalized())
+		plant->Finalize();		//Processes model after all physical elements added to get it ready for computation
 	diagram = builder.Build();
 	diagramContext = diagram->CreateDefaultContext();
 	plantContext = &diagram->GetMutableSubsystemContext(*plant, diagramContext.get());
