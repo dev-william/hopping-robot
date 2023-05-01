@@ -33,15 +33,15 @@ trajectories::PiecewisePolynomial<double> optimize() {
 	double timestep = 0.0;        //If 0.0, then system is continuous
 	bool use3d = false;
 
-	RobotSystem sys(timestep, use3d, true);
+	RobotSystem sys(timestep, use3d, true, false);
 
 	systems::InputPortIndex exportedInputIndex = sys.builder.ExportInput(sys.plant->get_actuation_input_port(), "exported_input");		//Give dircol access to plant input
 
 	sys.finalize();
 
 
-	double horizon = 0.4;
-	int numTimeSamples = 50;
+	double horizon = 0.36;
+	int numTimeSamples = 80;
 	double stepDuration = horizon / numTimeSamples;
 	//DirectTranscription dirTran(&plant, plantContext, numTimeSamples, plant.get_actuation_input_port(modelIndex).get_index());	//Plant or diagram? sceneGraph needed for collisions
 	DirectCollocation dirCol(sys.diagram.get(), *sys.diagramContext, numTimeSamples, stepDuration, stepDuration, exportedInputIndex, true);
@@ -78,14 +78,14 @@ trajectories::PiecewisePolynomial<double> optimize() {
 	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] <= maxSpringForce);
 	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] >= -maxSpringForce);
 
-	Traj initial = makeInitialGuess(help, Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.0, 0.45}}, 0.4);
+	Traj initial = makeInitialGuess(help, Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.0, 0.45}}, horizon);
 	dirCol.SetInitialTrajectory(initial.u, initial.x);
 
 
 	solvers::SnoptSolver solver;
 	solvers::SolverOptions options = mp.solver_options();
 	options.SetOption(solvers::CommonSolverOption::kPrintToConsole, 1);		//Doesn't seem to do anything
-	//options.SetOption(solver.id(), "iterationslimit", 1000000);
+	options.SetOption(solver.id(), "Iterations limit", 1000000);		//Increase iterations limit a lot
 	//options.SetOption(solver.id(), "Major iterations limit", 500);
 	options.SetOption(solver.id(), "Major optimality tolerance", 1e-4);
 	mp.SetSolverOptions(options);
@@ -110,7 +110,7 @@ trajectories::PiecewisePolynomial<double> optimize2() {
 	double timestep = 0.0;        //If 0.0, then system is continuous
 	bool use3d = false;
 
-	RobotSystem sys(timestep, use3d, true);
+	RobotSystem sys(timestep, use3d, true, false);
 
 	systems::InputPortIndex exportedInputIndex = sys.builder.ExportInput(sys.plant->get_actuation_input_port(), "exported_input");		//Give dircol access to plant input
 
@@ -134,8 +134,9 @@ trajectories::PiecewisePolynomial<double> optimize2() {
 int main() {
 	double timestep = 0.001;        //If 0.0, then system is continuous
 	bool use3d = false;
+	bool pinned = true;
 
-	RobotSystem sys(timestep, use3d, false);
+	RobotSystem sys(timestep, use3d, false, pinned);
 	sys.addZeroInput();
 
 	//std::shared_ptr<geometry::Meshcat> meshcat = std::make_shared<geometry::Meshcat>();
@@ -152,7 +153,7 @@ int main() {
 	VectorX<double> posVec = sys.plant->GetPositions(plantContext, sys.modelIndex);
 	std::cout << "Position vector size: " << posVec.rows() << "\n";
 
-	trajectories::PiecewisePolynomial<double> stateTraj = optimize();
+	/*trajectories::PiecewisePolynomial<double> stateTraj = optimize();
 	//Traj initialGuess = makeInitialGuess(help, Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.5, 0.45}}, 2.0);
 	//trajectories::PiecewisePolynomial<double> stateTraj = initialGuess.x;
 	yaml::SaveYamlFile("traj.yaml", stateTraj);
@@ -169,31 +170,34 @@ int main() {
 
 		//viz.StopRecording();
 		//viz.PublishRecording();
-	}
+	}*/
 
 
 
 	//Simulate uncontrolled robot
 	//help.shoulderJoint->set_angle(&plantContext, 0.0);
-	/*help.elbowJoint->set_angle(&plantContext, 0.02);
+	help.elbowJoint->set_angle(&plantContext, 0.02);
 	help.springJoint->set_translation(&plantContext, 0.0);
 
 	Eigen::Vector3d initialPos;
 	initialPos << 0.0, 0.0, 0.45;
-	if(use3d) {
-		math::RigidTransformd initialTransform{initialPos};
-		sys.plant->SetFreeBodyPoseInWorldFrame(&plantContext, sys.plant->GetBodyByName("base_link"), initialTransform);
+	if(!pinned) {
+		if(use3d) {
+			math::RigidTransformd initialTransform{initialPos};
+			sys.plant->SetFreeBodyPoseInWorldFrame(&plantContext, sys.plant->GetBodyByName("base_link"), initialTransform);
+		}
+		else {
+			multibody::PlanarJoint<double>& planarJoint = sys.plant->GetMutableJointByName<multibody::PlanarJoint>("floating");
+			planarJoint.set_translation(&plantContext, Eigen::Vector2d(initialPos[0], initialPos[2]));
+		}
 	}
-	else {
-		multibody::PlanarJoint<double>& planarJoint = sys.plant->GetMutableJointByName<multibody::PlanarJoint>("floating");
-		planarJoint.set_translation(&plantContext, Eigen::Vector2d(initialPos[0], initialPos[2]));
-	}
+	//std::cout << "Base body name: " << sys.plant->GetUniqueFreeBaseBodyOrThrow(sys.modelIndex).name() << "\n";
 
 	sys.diagram->ForcedPublish(*sys.diagramContext);
 	std::this_thread::sleep_for(chrono::seconds(4));
 
-	systems::Simulator<double> sim(*sys.diagram, std::move(sys.diagramContext));        //Why is std::move needed?
+	systems::Simulator<double> sim(*sys.diagram, std::move(sys.diagramContext));
 	sim.set_target_realtime_rate(0.5);
 	sim.Initialize();
-	sim.AdvanceTo(10.0);*/
+	sim.AdvanceTo(10.0);
 }

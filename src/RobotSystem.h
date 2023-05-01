@@ -6,7 +6,7 @@
 
 class RobotSystem {
 public:
-	RobotSystem(double timestep, bool use3d, bool less_collision);
+	RobotSystem(double timestep, bool use3d, bool less_collision, bool pinned);
 	void finalize();		//Must be called after constructor
 
 	//Call these functions before calling finalize()
@@ -21,8 +21,10 @@ public:
 	std::unique_ptr<drake::systems::Context<double>> diagramContext;
 	drake::systems::Context<double>* plantContext;
 
+	static constexpr double footSphereRadius = 0.01;
+
 private:
 	void connectToSceneGraph(drake::multibody::MultibodyPlant<double>& plant, drake::systems::DiagramBuilder<double>& builder);
 	void addGroundPlane();
-	void createRobotPlant(drake::systems::DiagramBuilder<double>& builder, double timestep, bool use3d, bool less_collision);
+	void createRobotPlant(drake::systems::DiagramBuilder<double>& builder, double timestep, bool use3d, bool less_collision, bool pinned);
 };

@@ -15,7 +15,16 @@ public:
 		if(is3d) {
 			//shoulderJoint = &plant.GetMutableJointByName<multibody::RevoluteJoint>("shoulder");
 		}
-		floatingJoint = &plant.GetMutableJointByName<multibody::Joint>("floating");
+
+		try {
+			floatingJoint = &plant.GetMutableJointByName<multibody::Joint>("floating");
+		}
+		catch (std::logic_error e) {}		//Leave at nullptr if joint doesn't exist
+
+		try {
+			pinJoint = &plant.GetMutableJointByName<multibody::Joint>("pin");
+		}
+		catch (std::logic_error e) {}
 
 		elbowActuator = &plant.GetJointActuatorByName(elbowJoint->name());
 		springActuator = &plant.GetJointActuatorByName(springJoint->name());
@@ -39,6 +48,7 @@ public:
 	multibody::PrismaticJoint<double>* springJoint = nullptr;
 	const multibody::JointActuator<double>* springActuator = nullptr;
 	multibody::Joint<double>* floatingJoint = nullptr;
+	multibody::Joint<double>* pinJoint = nullptr;
 
 	int floatingVelStateIndex() {
 		return plant.num_positions() + floatingJoint->velocity_start();

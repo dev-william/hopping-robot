@@ -32,7 +32,7 @@
 		</link>
 
 		<link name="upper_link">
-			<pose>0 0 0 0 0 0</pose>
+			<pose relative_to="base_link">0 0 0 0 0 0</pose>
 			<inertial>
 				<pose>0 0 -0.1 0 0 0</pose>
 				<mass>0.5</mass>
@@ -189,7 +189,7 @@
 				</dynamics>
 			</axis>
 		</joint>
-		<frame name="foot">
+		<frame name="foot" attached_to="foot_link">
 			<pose relative_to="foot_link">0 0 -0.1 0 0 0</pose>
 		</frame>
 	</model>

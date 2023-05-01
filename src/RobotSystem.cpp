@@ -3,15 +3,17 @@
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/tree/quaternion_floating_joint.h"
 #include "drake/multibody/tree/planar_joint.h"
+#include "drake/multibody/tree/revolute_joint.h"
 #include "drake/systems/primitives/constant_vector_source.h"
+#include <iostream>
 
 using namespace drake;
 using namespace math;
 
-RobotSystem::RobotSystem(double timestep, bool use3d, bool less_collision) {
+RobotSystem::RobotSystem(double timestep, bool use3d, bool less_collision, bool pinned) {
 	sceneGraph = builder.AddSystem<geometry::SceneGraph>();
 
-	createRobotPlant(builder, timestep, use3d, less_collision);
+	createRobotPlant(builder, timestep, use3d, less_collision, pinned);
 
 	addGroundPlane();
 	plant->Finalize();		//Processes model after all physical elements added to get it ready for computation
@@ -49,19 +51,41 @@ void RobotSystem::addGroundPlane() {
 }
 
 //Call finalize on returned plant. sceneGraph optional
-void RobotSystem::createRobotPlant(systems::DiagramBuilder<double>& builder, double timestep, bool use3d, bool less_collision) {
+void RobotSystem::createRobotPlant(systems::DiagramBuilder<double>& builder, double timestep, bool use3d, bool less_collision, bool pinned) {
 	plant = builder.AddSystem<multibody::MultibodyPlant<double>>(timestep);
 	connectToSceneGraph(*plant, builder);
 	multibody::Parser parser(plant);
-	modelIndex = parser.AddModelFromFile(less_collision ? "../sdf/robot_2d_less_collision.sdf" : "../sdf/robot_2d.sdf");
+	std::string modelFile;
+	if(use3d) {
+		modelFile = "../sdf/robot_2d.sdf";
+	}
+	else {
+		if(pinned) {
+			modelFile = "../sdf/robot_2d_pinned.sdf";		//Drake does not support joints between world and a body that isn't the base, unfortunately. Apparently they're working on it
+		}
+		else {
+			if(less_collision)
+				modelFile = "../sdf/robot_2d_less_collision.sdf";
+			else
+				modelFile = "../sdf/robot_2d.sdf";
+		}
+	}
+	modelIndex = parser.AddModelFromFile(modelFile);
 
 	if(use3d) {
 		//Create this explicitly so that it is named
 		plant->AddJoint<multibody::QuaternionFloatingJoint>("floating", plant->world_body(), {}, plant->GetBodyByName("base_link"), {});
 	}
 	else {
-		RigidTransformd frameTf = RigidTransformd(RollPitchYaw(90.0*M_PI/180.0, 0.0, 0.0), Eigen::Vector3d::Zero());
-		//multibody::FixedOffsetFrame<double> planarFrame("Planar frame", plant.world_body(), frameTf);
-		plant->AddJoint<multibody::PlanarJoint>("floating", plant->world_body(), frameTf, plant->GetBodyByName("base_link"), frameTf, Eigen::Vector3d::Zero());
+		if(pinned) {
+			math::RigidTransformd footTf = plant->GetFrameByName("foot").GetFixedPoseInBodyFrame();
+			math::RigidTransformd ballOffset{Eigen::Vector3d{0.0, 0.0, footSphereRadius}};
+			plant->AddJoint<multibody::RevoluteJoint>("pin", plant->world_body(), ballOffset, plant->GetBodyByName("foot_link"), footTf, Eigen::Vector3d::UnitY());
+		}
+		else {
+			RigidTransformd frameTf = RigidTransformd(RollPitchYaw(90.0*M_PI/180.0, 0.0, 0.0), Eigen::Vector3d::Zero());
+			//multibody::FixedOffsetFrame<double> planarFrame("Planar frame", plant.world_body(), frameTf);
+			plant->AddJoint<multibody::PlanarJoint>("floating", plant->world_body(), frameTf, plant->GetBodyByName("base_link"), frameTf, Eigen::Vector3d::Zero());
+		}
 	}
 }
