@@ -189,7 +189,7 @@ trajectories::PiecewisePolynomial<double> optimizeOverScene() {
 
 	//sys.plant->set_contact_model(multibody::ContactModel::kPoint);
 	//Setting penetration allowance made things worse
-	//sys.plant->set_penetration_allowance(0.005);		//Default value unclear - could be .001 but docs have comment about it being automatically determined
+	//sys.plant->set_penetration_allowance(0.005);		//Default value .001
 	sys.plantFinalize();
 
 	systems::InputPortIndex exportedInputIndex = sys.exportInput();		//Give dircol access to plant input
@@ -265,7 +265,7 @@ trajectories::PiecewisePolynomial<double> optimizeOverScene() {
 
 
 HybridOptimization::HybridOptimization() {
-	double timestep = 0.0;        //If 0.0, then system is continuous
+	double timestep = 0.0;
 	bool use3d = false;
 
 	sysFloating = std::make_unique<RobotSystem>(timestep, use3d, true, false, false);
@@ -342,7 +342,7 @@ void HybridOptimization::solve() {
 Traj HybridOptimization::convertPinnedToFloating(const Traj& pinnedTraj) {
 	Traj output;
 
-	const std::vector<double> breaks = pinnedTraj.x.get_segment_times();		//Includes start and end times
+	const std::vector<double>& breaks = pinnedTraj.x.get_segment_times();		//Includes start and end times
 	std::vector<MatrixX<double>> updatedSamples;
 	for(double t : breaks) {
 		Eigen::VectorXd orig = pinnedTraj.x.value(t);
@@ -362,7 +362,19 @@ Traj HybridOptimization::convertPinnedToFloating(const Traj& pinnedTraj) {
 	}
 	output.x = trajectories::PiecewisePolynomial<double>::FirstOrderHold(breaks, updatedSamples);		//Not bothering with cubic for now
 
-	output.u = pinnedTraj.u;		//Todo: negate spring input
+	//Negate spring input
+	const std::vector<double>& inputBreaks = pinnedTraj.u.get_segment_times();
+	std::vector<MatrixX<double>> updatedInputs;
+	for(double t : inputBreaks) {
+		Eigen::VectorXd orig = pinnedTraj.x.value(t);
+		Eigen::VectorXd updated = Eigen::VectorXd::Zero(helpFloating->plant.num_actuated_dofs());
+
+		updated[helpFloating->elbowActuator->input_start()] = orig[helpPinned->elbowActuator->input_start()];
+		updated[helpFloating->springActuator->input_start()] = -orig[helpPinned->springActuator->input_start()];
+
+		updatedInputs.push_back(updated);
+	}
+	output.u = trajectories::PiecewisePolynomial<double>::FirstOrderHold(inputBreaks, updatedInputs);
 
 	return output;
 }

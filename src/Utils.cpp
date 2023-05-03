@@ -1,11 +1,16 @@
 #include "Utils.h"
 #include "RobotSystem.h"
+#include "StateHelper.h"
 #include <iostream>
 #include <chrono>
 #include <thread>
 
+//From https://github.com/lava/matplotlib-cpp
+#include "matplotlibcpp.h"
+
 using namespace drake;
 using namespace std;
+namespace plt = matplotlibcpp;
 
 void playTrajectory(trajectories::PiecewisePolynomial<double>& stateTraj, RobotSystem& sys, double rate) {
 	std::unique_ptr<systems::Context<double>> diagramContext = sys.diagram->CreateDefaultContext();
@@ -26,4 +31,29 @@ void playTrajectory(trajectories::PiecewisePolynomial<double>& stateTraj, RobotS
 			std::this_thread::sleep_for(chrono::seconds(3));
 		}
 	}
+}
+
+void plotTraj(const Traj& traj, const StateHelper& help) {
+	const std::vector<double>& breaksX = traj.x.get_segment_times();
+	const std::vector<double>& breaksU = traj.u.get_segment_times();
+	std::vector<double> z;
+	std::vector<double> spring;
+	for(double t : breaksX) {
+		Eigen::VectorXd sample = traj.x.value(t);
+		z.push_back(sample[help.floatingPzStateIndex()]);
+		spring.push_back(sample[help.springJoint->position_start()]);
+	}
+
+	std::vector<double> springInput;
+	for(double t : breaksU) {
+		Eigen::VectorXd sample = traj.u.value(t);
+		springInput.push_back(sample[help.springActuator->input_start()]);
+	}
+
+	plt::plot(breaksX, z);
+	plt::plot(breaksX, spring);
+	plt::show();
+	
+	plt::plot(breaksU, springInput);
+	plt::show();
 }

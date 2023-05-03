@@ -26,6 +26,9 @@ endif()
 
 find_package(drake CONFIG REQUIRED PATHS /opt/drake)
 
+#For matplotlibcpp
+find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
+
 #get_filename_component(DRAKE_PYTHONPATH "${drake_DIR}" DIRECTORY)
 #get_filename_component(DRAKE_PYTHONPATH "${DRAKE_PYTHONPATH}" DIRECTORY)
 #set(DRAKE_PYTHONPATH
@@ -35,7 +38,7 @@ find_package(drake CONFIG REQUIRED PATHS /opt/drake)
 #add_subdirectory(src)
 
 add_executable(main src/main.cpp src/RobotSystem.cpp src/Utils.cpp src/Optimize.cpp)
-target_link_libraries(main drake::drake)
+target_link_libraries(main drake::drake Python3::Python)
 
 add_executable(replay src/replay.cpp src/RobotSystem.cpp src/Utils.cpp)
-target_link_libraries(replay drake::drake)
+target_link_libraries(replay drake::drake Python3::Python)

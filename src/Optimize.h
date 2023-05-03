@@ -61,6 +61,7 @@ namespace drake::planning::trajectory_optimization {
 	class DirectCollocation;
 }
 
+//This method doesn't work
 drake::trajectories::PiecewisePolynomial<double> optimizeOverScene();
 
 class HybridOptimization {
