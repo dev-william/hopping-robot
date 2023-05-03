@@ -1,12 +1,16 @@
 #include "RobotSystem.h"
 #include "Utils.h"
+#include "StateHelper.h"
 #include "drake/common/yaml/yaml_io.h"
 #include "drake/geometry/drake_visualizer.h"
 
 using namespace drake;
+using namespace trajectories;
 
 int main() {
-	trajectories::PiecewisePolynomial<double> stateTrajLoaded = yaml::LoadYamlFile<trajectories::PiecewisePolynomial<double>>("stateTraj.yaml");
+	Traj loaded;
+	loaded.x = yaml::LoadYamlFile<PiecewisePolynomial<double>>("stateTraj.yaml");
+	loaded.u = yaml::LoadYamlFile<PiecewisePolynomial<double>>("inputTraj.yaml");
 
 	double timestep = 0.001;
 	bool use3d = false;			//Todo: autodetect use3d and pinned
@@ -16,6 +20,9 @@ int main() {
 	geometry::DrakeVisualizer<double> viz;
 	viz.AddToBuilder(&sys.builder, *sys.sceneGraph);
 	sys.finalize();
+	StateHelper help(*sys.plant);
 
-	playTrajectory(stateTrajLoaded, sys, 0.02);
+	playTrajectory(loaded.x, sys, 0.02);
+
+	plotTraj(loaded, help);
 }

@@ -44,11 +44,13 @@ int main() {
 	StateHelper help(*sys.plant);
 
 
+	bool allowVariableTime = true;
 	HybridOptimization hybrid;
-	hybrid.createProblem(Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.0, 0.5}}, 0.4);
+	hybrid.createProblem(Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.0, 0.5}}, 0.4, allowVariableTime);
 	hybrid.solve();
 	Traj optResult = hybrid.reconstructFullTraj();
 	trajectories::PiecewisePolynomial<double> stateTraj = optResult.x;
+	cout << "Trajectory duration: " << optResult.x.end_time() << " s\n";
 
 	//trajectories::PiecewisePolynomial<double> stateTraj = optimizeOverScene();
 	//FootstepGuesser guesser(Eigen::VectorXd{{0.0, 0.55}}, Eigen::VectorXd{{0.5, 0.55}}, 2.0);

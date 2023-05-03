@@ -282,12 +282,13 @@ HybridOptimization::HybridOptimization() {
 	helpPinned = std::make_unique<StateHelper>(*sysPinned->plant);
 }
 
-void HybridOptimization::createProblem(Eigen::VectorXd initialPos, Eigen::VectorXd finalPos, double totalTime) {
+void HybridOptimization::createProblem(Eigen::VectorXd initialPos, Eigen::VectorXd finalPos, double totalTime, bool allowVariableTime) {
 	FootstepGuesser guesser(initialPos, finalPos, totalTime);
+	double timeVariation = allowVariableTime ? 0.1 : 0.0;
 
 	for(int i = 0; i < guesser.contacts.size(); ++i) {
 		Traj flightGuess = guesser.makeFlightGuess(i, *helpFloating);
-		shared_ptr<DirectCollocation> dirColFloating = setupFloating(flightGuess, false);
+		shared_ptr<DirectCollocation> dirColFloating = setupFloating(flightGuess, timeVariation, false);
 		dirColsFloating.push_back(dirColFloating);
 
 		if(i == 0) {
@@ -298,14 +299,14 @@ void HybridOptimization::createProblem(Eigen::VectorXd initialPos, Eigen::Vector
 		}
 
 		Traj pinnedGuess = guesser.makeContactGuess(i, *helpPinned);
-		shared_ptr<DirectCollocation> dirColPinned = setupPinned(pinnedGuess);
+		shared_ptr<DirectCollocation> dirColPinned = setupPinned(pinnedGuess, timeVariation);
 		dirColsPinned.push_back(dirColPinned);
 
 		linkAtContactStart2d(*dirColFloating, *dirColPinned);
 	}
 
 	Traj finalGuess = guesser.makeFlightGuess(guesser.contacts.size(), *helpFloating);
-	shared_ptr<DirectCollocation> dirColFinal = setupFloating(finalGuess, true);
+	shared_ptr<DirectCollocation> dirColFinal = setupFloating(finalGuess, timeVariation, true);
 	dirColsFloating.push_back(dirColFinal);
 
 	constrainStateToPos(dirColFinal->final_state(), finalPos);
@@ -408,14 +409,16 @@ Traj HybridOptimization::reconstructFullTraj() {
 	return output;
 }
 
-std::shared_ptr<DirectCollocation> HybridOptimization::setupFloating(const Traj& guess, bool isFinal) {
+std::shared_ptr<DirectCollocation> HybridOptimization::setupFloating(const Traj& guess, double timeVariationPercent, bool isFinal) {
 	double horizon = guess.x.end_time();
 	int numTimeSamples = 20;
 	double stepDuration = horizon / numTimeSamples;
+	double stepDurationMin = stepDuration * (1.0 - timeVariationPercent);
+	double stepDurationMax = stepDuration * (1.0 + timeVariationPercent);
 
-	shared_ptr<DirectCollocation> dirCol = std::make_shared<DirectCollocation>(sysFloating->diagram.get(), *sysFloating->diagramContext, numTimeSamples, stepDuration, stepDuration, inputFloating, true, &mp);
+	shared_ptr<DirectCollocation> dirCol = std::make_shared<DirectCollocation>(sysFloating->diagram.get(), *sysFloating->diagramContext, numTimeSamples, stepDurationMin, stepDurationMax, inputFloating, true, &mp);
 
-	dirCol->AddEqualTimeIntervalsConstraints();
+	dirCol->AddEqualTimeIntervalsConstraints();		//Is having all these constraints less efficient than just having one time decision variable?
 	addInputConstraints(*dirCol, *helpFloating);
 	dirCol->SetInitialTrajectory(guess.u, guess.x);
 
@@ -439,12 +442,14 @@ std::shared_ptr<DirectCollocation> HybridOptimization::setupFloating(const Traj&
 	return dirCol;
 }
 
-std::shared_ptr<DirectCollocation> HybridOptimization::setupPinned(const Traj& guess) {
+std::shared_ptr<DirectCollocation> HybridOptimization::setupPinned(const Traj& guess, double timeVariationPercent) {
 	double horizon = guess.x.end_time();
 	int numTimeSamples = 20;
 	double stepDuration = horizon / numTimeSamples;
+	double stepDurationMin = stepDuration * (1.0 - timeVariationPercent);
+	double stepDurationMax = stepDuration * (1.0 + timeVariationPercent);
 
-	shared_ptr<DirectCollocation> dirCol = std::make_shared<DirectCollocation>(sysPinned->diagram.get(), *sysPinned->diagramContext, numTimeSamples, stepDuration, stepDuration, inputPinned, true, &mp);
+	shared_ptr<DirectCollocation> dirCol = std::make_shared<DirectCollocation>(sysPinned->diagram.get(), *sysPinned->diagramContext, numTimeSamples, stepDurationMin, stepDurationMax, inputPinned, true, &mp);
 
 	dirCol->AddEqualTimeIntervalsConstraints();
 	addInputConstraints(*dirCol, *helpPinned);

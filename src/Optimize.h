@@ -67,7 +67,7 @@ drake::trajectories::PiecewisePolynomial<double> optimizeOverScene();
 class HybridOptimization {
 public:
 	HybridOptimization();
-	void createProblem(Eigen::VectorXd initialPosIn, Eigen::VectorXd finalPosIn, double totalTimeIn);
+	void createProblem(Eigen::VectorXd initialPosIn, Eigen::VectorXd finalPosIn, double totalTimeIn, bool allowVariableTime);
 	void solve();
 	Traj convertPinnedToFloating(const Traj& pinnedTraj);		//Assumes 2d
 	Traj reconstructFullTraj();		//Get the solution
@@ -81,8 +81,8 @@ public:
 	drake::solvers::MathematicalProgramResult res;
 
 private:
-	std::shared_ptr<drake::planning::trajectory_optimization::DirectCollocation> setupFloating(const Traj& guess, bool isFinal);
-	std::shared_ptr<drake::planning::trajectory_optimization::DirectCollocation> setupPinned(const Traj& guess);
+	std::shared_ptr<drake::planning::trajectory_optimization::DirectCollocation> setupFloating(const Traj& guess, double timeVariationPercent, bool isFinal);
+	std::shared_ptr<drake::planning::trajectory_optimization::DirectCollocation> setupPinned(const Traj& guess, double timeVariationPercent);
 	static void addInputConstraints(drake::planning::trajectory_optimization::DirectCollocation& dirCol, const StateHelper& help);
 	void constrainStateToPos(drake::solvers::VectorXDecisionVariable state, Eigen::VectorXd pos);		//Assumes 2d and floating. Zeroes all velocities
 	void linkAtContactStart2d(drake::planning::trajectory_optimization::DirectCollocation& dirColFloating, drake::planning::trajectory_optimization::DirectCollocation& dirColPinned);
