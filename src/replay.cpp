@@ -6,7 +6,7 @@
 using namespace drake;
 
 int main() {
-	trajectories::PiecewisePolynomial<double> stateTrajLoaded = yaml::LoadYamlFile<trajectories::PiecewisePolynomial<double>>("traj.yaml");
+	trajectories::PiecewisePolynomial<double> stateTrajLoaded = yaml::LoadYamlFile<trajectories::PiecewisePolynomial<double>>("stateTraj.yaml");
 
 	double timestep = 0.001;
 	bool use3d = false;			//Todo: autodetect use3d and pinned

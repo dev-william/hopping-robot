@@ -54,7 +54,8 @@ int main() {
 	//FootstepGuesser guesser(Eigen::VectorXd{{0.0, 0.55}}, Eigen::VectorXd{{0.5, 0.55}}, 2.0);
 	//Traj initialGuess = guesser.makeFullGuess(false, help);
 	//trajectories::PiecewisePolynomial<double> stateTraj = initialGuess.x;
-	yaml::SaveYamlFile("traj.yaml", stateTraj);
+	yaml::SaveYamlFile("stateTraj.yaml", stateTraj);
+	yaml::SaveYamlFile("inputTraj.yaml", optResult.u);
 
 	//trajectories::PiecewisePolynomial<double> stateTrajLoaded = yaml::LoadYamlFile<trajectories::PiecewisePolynomial<double>>("traj.yaml");
 

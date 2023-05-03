@@ -42,3 +42,6 @@ target_link_libraries(main drake::drake Python3::Python)
 
 add_executable(replay src/replay.cpp src/RobotSystem.cpp src/Utils.cpp)
 target_link_libraries(replay drake::drake Python3::Python)
+
+add_executable(follow src/follow.cpp src/RobotSystem.cpp src/Utils.cpp)
+target_link_libraries(follow drake::drake Python3::Python)
