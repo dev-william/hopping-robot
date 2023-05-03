@@ -10,12 +10,14 @@
 using namespace drake;
 using namespace math;
 
-RobotSystem::RobotSystem(double timestep, bool use3d, bool less_collision, bool pinned) {
-	sceneGraph = builder.AddSystem<geometry::SceneGraph>();
+RobotSystem::RobotSystem(double timestep, bool use3d, bool less_collision, bool pinned, bool addSceneGraph) {
+	if(addSceneGraph)
+		sceneGraph = builder.AddSystem<geometry::SceneGraph>();
 
 	createRobotPlant(builder, timestep, use3d, less_collision, pinned);
 
-	addGroundPlane();
+	if(addSceneGraph)
+		addGroundPlane();
 }
 
 void RobotSystem::plantFinalize() {
@@ -33,6 +35,10 @@ void RobotSystem::finalize() {
 void RobotSystem::addZeroInput() {
 	auto zeroTorque = builder.AddSystem<systems::ConstantVectorSource<double>>(Eigen::Vector2d::Zero());
 	builder.Connect(zeroTorque->get_output_port(), plant->get_actuation_input_port());
+}
+
+systems::InputPortIndex RobotSystem::exportInput() {
+	return builder.ExportInput(plant->get_actuation_input_port(), "exported_input");
 }
 
 //Basically does the same things as AddMultibodyPlantSceneGraph().
@@ -55,10 +61,11 @@ void RobotSystem::addGroundPlane() {
 	plant->RegisterCollisionGeometry(plant->world_body(), math::RigidTransformd(), geometry::HalfSpace(), "GroundCollisionGeometry", ground_friction);
 }
 
-//Call finalize on returned plant. sceneGraph optional
+//Must call finalize on returned plant.
 void RobotSystem::createRobotPlant(systems::DiagramBuilder<double>& builder, double timestep, bool use3d, bool less_collision, bool pinned) {
 	plant = builder.AddSystem<multibody::MultibodyPlant<double>>(timestep);
-	connectToSceneGraph(*plant, builder);
+	if(sceneGraph)
+		connectToSceneGraph(*plant, builder);
 	multibody::Parser parser(plant);
 	std::string modelFile;
 	if(use3d) {
@@ -84,8 +91,8 @@ void RobotSystem::createRobotPlant(systems::DiagramBuilder<double>& builder, dou
 	else {
 		if(pinned) {
 			math::RigidTransformd footTf = plant->GetFrameByName("foot").GetFixedPoseInBodyFrame();
-			math::RigidTransformd ballOffset{Eigen::Vector3d{0.0, 0.0, footSphereRadius}};
-			plant->AddJoint<multibody::RevoluteJoint>("pin", plant->world_body(), ballOffset, plant->GetBodyByName("foot_link"), footTf, Eigen::Vector3d::UnitY());
+			//math::RigidTransformd ballOffset{Eigen::Vector3d{0.0, 0.0, footSphereRadius}};		//Todo: decide if I want to have this ballOffset
+			plant->AddJoint<multibody::RevoluteJoint>("pin", plant->world_body(), {}, plant->GetBodyByName("foot_link"), footTf, Eigen::Vector3d::UnitY());
 		}
 		else {
 			RigidTransformd frameTf = RigidTransformd(RollPitchYaw(90.0*M_PI/180.0, 0.0, 0.0), Eigen::Vector3d::Zero());

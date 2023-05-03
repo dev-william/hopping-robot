@@ -3,18 +3,15 @@
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/tree/revolute_joint.h"
 #include "drake/multibody/tree/prismatic_joint.h"
+#include "drake/multibody/tree/prismatic_spring.h"
 
 using namespace drake;
 
 class StateHelper {
 public:
-	StateHelper(multibody::MultibodyPlant<double>& plantIn, bool is3dIn) : plant(plantIn), is3d(is3dIn) {
-		posDim = (is3d ? 3 : 2);
+	StateHelper(multibody::MultibodyPlant<double>& plantIn) : plant(plantIn) {
 		elbowJoint = &plant.GetMutableJointByName<multibody::RevoluteJoint>("elbow");
 		springJoint = &plant.GetMutableJointByName<multibody::PrismaticJoint>("spring");
-		if(is3d) {
-			//shoulderJoint = &plant.GetMutableJointByName<multibody::RevoluteJoint>("shoulder");
-		}
 
 		try {
 			floatingJoint = &plant.GetMutableJointByName<multibody::Joint>("floating");
@@ -28,6 +25,18 @@ public:
 
 		elbowActuator = &plant.GetJointActuatorByName(elbowJoint->name());
 		springActuator = &plant.GetJointActuatorByName(springJoint->name());
+
+		if(floatingJoint) {
+			is3d = (floatingJoint->num_positions() != 3);		//In 2d, planar joint has 3 pos
+		}
+		else {
+			is3d = (pinJoint->num_positions() != 1);		//In 2d, revolute joint has 1 pos
+		}
+		posDim = (is3d ? 3 : 2);
+		
+		if(is3d) {
+			//shoulderJoint = &plant.GetMutableJointByName<multibody::RevoluteJoint>("shoulder");
+		}
 
 		/*std::vector<multibody::JointActuatorIndex> actuatorIndices = plant.GetJointActuatorIndices(modelIndex);
 		plant.GetActuatorNames();
@@ -51,7 +60,7 @@ public:
 	multibody::Joint<double>* pinJoint = nullptr;
 
 	int floatingPzStateIndex() const {
-		return floatingJoint->position_start() + posDim - 1;
+		return floatingJoint->position_start() + posDim - 1;		//Cannot be called on pinned system
 	}
 	int floatingVelStateIndex() const {
 		return plant.num_positions() + floatingJoint->velocity_start();
@@ -62,11 +71,34 @@ public:
 	int springVelStateIndex() const {
 		return plant.num_positions() + springJoint->velocity_start();
 	}
+	int elbowVelStateIndex() const {
+		return plant.num_positions() + elbowJoint->velocity_start();
+	}
+	int pinVelStateIndex() const {
+		return plant.num_positions() + pinJoint->velocity_start();
+	}
 
 	int stateSize() const {
 		return plant.num_multibody_states();
 	}
 	Eigen::VectorXd getDefaultState() const {
 		return Eigen::VectorXd::Zero(stateSize());		//Todo: support quaternion in 3d case
+	}
+
+	const multibody::PrismaticSpring<double>* findSpring() const {
+		const multibody::PrismaticSpring<double>* output = nullptr;
+		for(int i = 0; i < plant.num_force_elements(); ++i) {
+			const multibody::PrismaticSpring<double>* current = nullptr;
+			try {
+				current = &plant.GetForceElement<multibody::PrismaticSpring>(multibody::ForceElementIndex(i));
+			}
+			catch (std::exception e) {}
+
+			if(current && &current->joint() == springJoint) {
+				output = current;
+				break;
+			}
+		}
+		return output;
 	}
 };

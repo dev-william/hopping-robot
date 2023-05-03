@@ -17,5 +17,5 @@ int main() {
 	viz.AddToBuilder(&sys.builder, *sys.sceneGraph);
 	sys.finalize();
 
-	playTrajectory(stateTrajLoaded, sys);
+	playTrajectory(stateTrajLoaded, sys, 0.02);
 }

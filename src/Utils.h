@@ -9,4 +9,4 @@ struct Traj {
 	drake::trajectories::PiecewisePolynomial<double> u;
 };
 
-void playTrajectory(drake::trajectories::PiecewisePolynomial<double>& stateTraj, RobotSystem& sys);
+void playTrajectory(drake::trajectories::PiecewisePolynomial<double>& stateTraj, RobotSystem& sys, double rate = 1.0);

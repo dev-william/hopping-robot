@@ -6,18 +6,18 @@
 
 class RobotSystem {
 public:
-	RobotSystem(double timestep, bool use3d, bool less_collision, bool pinned);
+	RobotSystem(double timestep, bool use3d, bool less_collision, bool pinned, bool addSceneGraph = true);
 	void plantFinalize();		//Optional but certain actions (like addZeroInput()) need the plant to be finalized first
 	void finalize();		//Must be called after constructor
 
 	//Call these functions before calling finalize()
 	void addZeroInput();
+	drake::systems::InputPortIndex exportInput();		//Give dircol access to input at the diagram level
 
 	drake::systems::DiagramBuilder<double> builder;
-	drake::geometry::SceneGraph<double>* sceneGraph;
+	drake::geometry::SceneGraph<double>* sceneGraph = nullptr;
 	drake::multibody::MultibodyPlant<double>* plant;
 	drake::multibody::ModelInstanceIndex modelIndex;
-	drake::systems::InputPortIndex exportedInputIndex;
 	std::unique_ptr<drake::systems::Diagram<double>> diagram;
 	std::unique_ptr<drake::systems::Context<double>> diagramContext;
 	drake::systems::Context<double>* plantContext;
