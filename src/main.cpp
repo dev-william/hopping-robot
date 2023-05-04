@@ -44,9 +44,9 @@ int main() {
 	StateHelper help(*sys.plant);
 
 
-	bool allowVariableTime = true;
+	bool allowVariableTime = false;
 	HybridOptimization hybrid;
-	hybrid.createProblem(Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.0, 0.5}}, 0.4, allowVariableTime);
+	hybrid.createProblem(Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.1, 0.45}}, 2, allowVariableTime);
 	hybrid.solve();
 	Traj optResult = hybrid.reconstructFullTraj();
 	trajectories::PiecewisePolynomial<double> stateTraj = optResult.x;

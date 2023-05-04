@@ -7,6 +7,7 @@
 
 #include "StateHelper.h"
 #include "RobotSystem.h"
+#include "Constraints.h"
 #include <iostream>
 #include <chrono>
 
@@ -20,7 +21,7 @@ Eigen::VectorXd makeState(Eigen::VectorXd vec, double z, const StateHelper& help
 	return state;
 }
 
-FootstepGuesser::FootstepGuesser(Eigen::VectorXd initialPosIn, Eigen::VectorXd finalPosIn, double totalTimeIn) : initialPos(initialPosIn), finalPos(finalPosIn), totalTime(totalTimeIn) {
+FootstepGuesser::FootstepGuesser(Eigen::VectorXd initialPosIn, Eigen::VectorXd finalPosIn, int numContacts) : initialPos(initialPosIn), finalPos(finalPosIn) {
 	springPeriod = 2*M_PI / std::sqrt(springConstant / mass);		//Gravity probably changes this, at least for a half cycle
 	ballisticTime = 2.0*fallTime(apexHeight - robotHeight, g);
 	bounceTime = ballisticTime + springPeriod / 2.0;
@@ -31,20 +32,23 @@ FootstepGuesser::FootstepGuesser(Eigen::VectorXd initialPosIn, Eigen::VectorXd f
 	
 	firstBallisticTime = fallTime(initialZ - robotHeight, g);
 	lastBallisticTime = fallTime(finalZ - robotHeight, g);
-	additionalBounces = std::max(0, (int) std::lround((totalTime - firstBallisticTime - lastBallisticTime - springPeriod / 2.0) / bounceTime));
+	//additionalBounces = std::max(0, (int) std::lround((totalTime - firstBallisticTime - lastBallisticTime - springPeriod / 2.0) / bounceTime));
 
-	contacts.push_back(replaceZ(initialPos, robotHeight));
-	contactTimes.push_back(firstBallisticTime);
-
-	Eigen::VectorXd deltaPosPerBounce = replaceZ(finalPos - initialPos, 0.0) / (double) additionalBounces;		//Unused if divided by zero
-	for(int i = 0; i < additionalBounces; ++i) {
-		Eigen::VectorXd ballisticEnd = contacts[0] + (i+1) * deltaPosPerBounce;
-		contacts.push_back(ballisticEnd);
-		contactTimes.push_back(contactTimes.back() + ballisticTime + springPeriod / 2.0);
+	Eigen::VectorXd deltaPosPerBounce = replaceZ(finalPos - initialPos, 0.0) / (double) (numContacts - 1);		//Unused if divided by zero
+	for(int i = 0; i < numContacts; ++i) {
+		if(i == 0) {
+			contacts.push_back(replaceZ(initialPos, robotHeight));
+			contactTimes.push_back(firstBallisticTime);
+		}
+		else {
+			Eigen::VectorXd ballisticEnd = contacts[0] + (i+1) * deltaPosPerBounce;
+			contacts.push_back(ballisticEnd);
+			contactTimes.push_back(contactTimes.back() + ballisticTime + springPeriod / 2.0);
+		}
 	}
 }
 
-Traj FootstepGuesser::makeFullGuess(bool enforceTotalTime, const StateHelper& help) {
+Traj FootstepGuesser::makeFullGuess(const StateHelper& help) {
 	Traj output;
 	auto baseSpringTraj = makeSpringTraj(contactSpeed, springPeriod / 2.0, robotHeight, 10, help);
 
@@ -63,11 +67,11 @@ Traj FootstepGuesser::makeFullGuess(bool enforceTotalTime, const StateHelper& he
 		output.x.ConcatenateInTime(ballisticTraj);
 	}
 
-	if(enforceTotalTime) {
+	/*if(enforceTotalTime) {
 		double timeScaleFactor = totalTime / output.x.end_time();		//Assuming start_time is 0
 		output.x.ScaleTime(timeScaleFactor);
 		std::cout << "Scaled initial guess time by " << timeScaleFactor << "\n";
-	}
+	}*/
 	output.u = makeZeroInput(output.x, help);
 
 	return output;
@@ -174,6 +178,13 @@ drake::trajectories::PiecewisePolynomial<double> makeSpringTraj(double initialSp
 		sampleDot[index_pz_spring] = vz;
 		sampleDot[index_vz_spring] = vzDot;
 
+		if(help.pinJoint) {
+			sample[index_pz_spring] *= -1.0;
+			sample[index_vz_spring] *= -1.0;
+			sampleDot[index_pz_spring] *= -1.0;
+			sampleDot[index_vz_spring] *= -1.0;
+		}
+
 		samples.push_back(sample);
 		sampleDots.push_back(sampleDot);
 	}
@@ -236,7 +247,7 @@ trajectories::PiecewisePolynomial<double> optimizeOverScene() {
 	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] >= -maxSpringForce);
 
 	FootstepGuesser guesser(Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.0, 0.45}}, horizon);
-	Traj initial = guesser.makeFullGuess(true, help);
+	Traj initial = guesser.makeFullGuess(help);
 	dirCol.SetInitialTrajectory(initial.u, initial.x);
 
 
@@ -280,10 +291,22 @@ HybridOptimization::HybridOptimization() {
 
 	helpFloating = std::make_unique<StateHelper>(*sysFloating->plant);
 	helpPinned = std::make_unique<StateHelper>(*sysPinned->plant);
+
+	diagramFloatingAd = systems::System<double>::ToAutoDiffXd(*sysFloating->diagram);		//Converting to symbolic is also possible but probably not a good idea
+	plantFloatingAd = &diagramFloatingAd->GetDowncastSubsystemByName<multibody::MultibodyPlant>(sysFloating->plant->get_name());
+	diagramContextFloatingAd = diagramFloatingAd->CreateDefaultContext();
+	plantContextFloatingAd = &diagramFloatingAd->GetMutableSubsystemContext(*plantFloatingAd, diagramContextFloatingAd.get());
+	footFloatingAd = &plantFloatingAd->GetFrameByName("foot");
+
+	diagramPinnedAd = systems::System<double>::ToAutoDiffXd(*sysPinned->diagram);
+	plantPinnedAd = &diagramPinnedAd->GetDowncastSubsystemByName<multibody::MultibodyPlant>(sysPinned->plant->get_name());
+	diagramContextPinnedAd = diagramPinnedAd->CreateDefaultContext();
+	plantContextPinnedAd = &diagramPinnedAd->GetMutableSubsystemContext(*plantPinnedAd, diagramContextPinnedAd.get());
+	basePinnedAd = &plantPinnedAd->GetFrameByName("base_link");
 }
 
-void HybridOptimization::createProblem(Eigen::VectorXd initialPos, Eigen::VectorXd finalPos, double totalTime, bool allowVariableTime) {
-	FootstepGuesser guesser(initialPos, finalPos, totalTime);
+void HybridOptimization::createProblem(Eigen::VectorXd initialPos, Eigen::VectorXd finalPos, int numContacts, bool allowVariableTime) {
+	FootstepGuesser guesser(initialPos, finalPos, numContacts);
 	double timeVariation = allowVariableTime ? 0.1 : 0.0;
 
 	for(int i = 0; i < guesser.contacts.size(); ++i) {
@@ -301,6 +324,7 @@ void HybridOptimization::createProblem(Eigen::VectorXd initialPos, Eigen::Vector
 		Traj pinnedGuess = guesser.makeContactGuess(i, *helpPinned);
 		shared_ptr<DirectCollocation> dirColPinned = setupPinned(pinnedGuess, timeVariation);
 		dirColsPinned.push_back(dirColPinned);
+		createPinnedPosVars(dirColPinned.get());
 
 		linkAtContactStart2d(*dirColFloating, *dirColPinned);
 	}
@@ -340,7 +364,7 @@ void HybridOptimization::solve() {
 	}
 }
 
-Traj HybridOptimization::convertPinnedToFloating(const Traj& pinnedTraj) {
+Traj HybridOptimization::convertPinnedToFloating(const Traj& pinnedTraj, double px_wfoot) {
 	Traj output;
 
 	const std::vector<double>& breaks = pinnedTraj.x.get_segment_times();		//Includes start and end times
@@ -349,13 +373,13 @@ Traj HybridOptimization::convertPinnedToFloating(const Traj& pinnedTraj) {
 		Eigen::VectorXd orig = pinnedTraj.x.value(t);
 		Eigen::VectorXd updated = helpFloating->getDefaultState();
 
-		updated[helpFloating->elbowJoint->position_start()] = orig[helpPinned->elbowJoint->position_start()];
+		updated[helpFloating->elbowJoint->position_start()] = -orig[helpPinned->elbowJoint->position_start()];
 		updated[helpFloating->springJoint->position_start()] = -orig[helpPinned->springJoint->position_start()];
-		updated[helpFloating->floatingJoint->position_start() + 2] = orig[helpPinned->elbowJoint->position_start()] - orig[helpPinned->pinJoint->position_start()];
+		updated[helpFloating->floatingJoint->position_start() + 2] = -orig[helpPinned->elbowJoint->position_start()] - orig[helpPinned->pinJoint->position_start()];
 
 		sysPinned->plantContext->SetContinuousState(orig);
 		math::RigidTransformd basePose = sysPinned->plant->EvalBodyPoseInWorld(*sysPinned->plantContext, sysPinned->plant->GetBodyByName("base_link"));
-		updated[helpFloating->floatingJoint->position_start()] = basePose.translation()[0];
+		updated[helpFloating->floatingJoint->position_start()] = basePose.translation()[0] + px_wfoot;
 		updated[helpFloating->floatingJoint->position_start() + 1] = basePose.translation()[2];		//Todo: assumes 2d
 
 		//Ignoring velocity for now, since this is mainly for visualization
@@ -363,14 +387,14 @@ Traj HybridOptimization::convertPinnedToFloating(const Traj& pinnedTraj) {
 	}
 	output.x = trajectories::PiecewisePolynomial<double>::FirstOrderHold(breaks, updatedSamples);		//Not bothering with cubic for now
 
-	//Negate spring input
+	//Negate inputs. There should definitely be an simpler way to do this
 	const std::vector<double>& inputBreaks = pinnedTraj.u.get_segment_times();
 	std::vector<MatrixX<double>> updatedInputs;
 	for(double t : inputBreaks) {
-		Eigen::VectorXd orig = pinnedTraj.x.value(t);
+		Eigen::VectorXd orig = pinnedTraj.u.value(t);
 		Eigen::VectorXd updated = Eigen::VectorXd::Zero(helpFloating->plant.num_actuated_dofs());
 
-		updated[helpFloating->elbowActuator->input_start()] = orig[helpPinned->elbowActuator->input_start()];
+		updated[helpFloating->elbowActuator->input_start()] = -orig[helpPinned->elbowActuator->input_start()];
 		updated[helpFloating->springActuator->input_start()] = -orig[helpPinned->springActuator->input_start()];
 
 		updatedInputs.push_back(updated);
@@ -401,7 +425,7 @@ Traj HybridOptimization::reconstructFullTraj() {
 			Traj pinned;
 			pinned.x = xTraj;
 			pinned.u = uTraj;
-			Traj converted = convertPinnedToFloating(pinned);
+			Traj converted = convertPinnedToFloating(pinned, res.GetSolution(pinnedPosVars[dirColsPinned[i].get()][0]));
 			output.x.ConcatenateInTime(converted.x);
 			output.u.ConcatenateInTime(converted.u);
 		}
@@ -420,6 +444,7 @@ std::shared_ptr<DirectCollocation> HybridOptimization::setupFloating(const Traj&
 
 	dirCol->AddEqualTimeIntervalsConstraints();		//Is having all these constraints less efficient than just having one time decision variable?
 	addInputConstraints(*dirCol, *helpFloating);
+	addStateConstraints(*dirCol, *helpFloating);
 	dirCol->SetInitialTrajectory(guess.u, guess.x);
 
 	//Todo: remove vertical assumption
@@ -427,7 +452,15 @@ std::shared_ptr<DirectCollocation> HybridOptimization::setupFloating(const Traj&
 		if(i == 0)		//Already constrained when applicable
 			continue;
 		auto currentState = dirCol->state(i);
-		symbolic::Expression heightOffGround = currentState[helpFloating->floatingPzStateIndex()] - 0.4 + currentState[helpFloating->springJoint->position_start()];
+		symbolic::Variable baseZVar = currentState[helpFloating->floatingPzStateIndex()];
+		symbolic::Variable planarAngleVar = currentState[helpFloating->floatingJoint->position_start() + 2];
+		symbolic::Variable elbowVar = currentState[helpFloating->elbowJoint->position_start()];
+		symbolic::Variable springVar = currentState[helpFloating->springJoint->position_start()];
+
+		//Went ahead and wrote the analytical expression for the 2D case
+		//Not as robust and generalizable as using the MultibodyPlant math, but I was concerned about performance and also it's way less code
+		//Todo: unify methods and remove constants
+		symbolic::Expression heightOffGround = baseZVar - 0.2*cos(planarAngleVar) - (0.2 - springVar) * cos(planarAngleVar - elbowVar);
 		if(i == numTimeSamples - 1) {
 			if(!isFinal) {
 				mp.AddConstraint(heightOffGround == 0.0);
@@ -453,22 +486,40 @@ std::shared_ptr<DirectCollocation> HybridOptimization::setupPinned(const Traj& g
 
 	dirCol->AddEqualTimeIntervalsConstraints();
 	addInputConstraints(*dirCol, *helpPinned);
+	addStateConstraints(*dirCol, *helpPinned);
 	dirCol->SetInitialTrajectory(guess.u, guess.x);
 
 	//Normal force cannot be negative
-	//f_N = kx + u + F_g,foot
-	//Horizontal friction force currently unbounded. Damping force ignored.
+	//f_N = (-kx + u) * cos(pin) + F_g,foot
+	//Missing component from elbow moment?
+	//Damping force ignored.
 	double k = helpPinned->findSpring()->stiffness();
 	double footMass = 0.3;		//Todo: get constants like this from MultibodyPlant
 	for(int i = 0; i < numTimeSamples; ++i) {
 		auto currentState = dirCol->state(i);
 		auto currentInput = dirCol->input(i);
 		const symbolic::Variable& springInputVar = currentInput[helpPinned->springActuator->input_start()];
+		const symbolic::Variable& springPosVar = currentState[helpPinned->springJoint->position_start()];
+		const symbolic::Variable& pinVar = currentState[helpPinned->pinJoint->position_start()];
 
-		mp.AddConstraint(k*currentState[helpPinned->springJoint->position_start()] + springInputVar >= -9.81 * footMass);
+		//Flat ground assumed
+		symbolic::Expression normalForce = (-k*springPosVar + springInputVar) * cos(pinVar) + 9.81 * footMass;
+		mp.AddConstraint(normalForce >= 0.0);
+		mp.AddConstraint(pow((-k*springPosVar + springInputVar) * sin(pinVar), 2) <= pow(normalForce, 2));		//Friction limits. Coefficient of 1
+		//Drake also has a friction constraint which may be worth investigating
+		//Unsure of efficiency of pow(_, 2) - is 2 treated as an integer?
 	}
 
 	return dirCol;
+}
+
+//Explicitly track the x (and y if 3d) position of the contact point
+//Not strictly necessary, since I could make a big constraint that tracks world position by tying together a pinned phase and the flight phases before and after it
+//This way splits that constraint into two, which seems like it should be easier to think about
+//The main advantage is that contact positions can be constrained directly
+//Must be called before the link constraints are added
+void HybridOptimization::createPinnedPosVars(DirectCollocation* dirCol) {
+	pinnedPosVars[dirCol] = mp.NewContinuousVariables(1, "horz pinned");
 }
 
 void HybridOptimization::addInputConstraints(DirectCollocation& dirCol, const StateHelper& help) {
@@ -476,12 +527,29 @@ void HybridOptimization::addInputConstraints(DirectCollocation& dirCol, const St
 	dirCol.AddRunningCost(10.0 * u[0] * u[0]);
 	dirCol.AddRunningCost(10.0 * u[1] * u[1]);
 
-	double maxElbowTorque = 2.0;
+	double maxElbowTorque = 5.0;
 	double maxSpringForce = 80.0;		//Needs to be high to avoid infeasibility. Not physical, needs investigation
 	dirCol.AddConstraintToAllKnotPoints(u[help.elbowActuator->input_start()] <= maxElbowTorque);
 	dirCol.AddConstraintToAllKnotPoints(u[help.elbowActuator->input_start()] >= -maxElbowTorque);
 	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] <= maxSpringForce);
 	dirCol.AddConstraintToAllKnotPoints(u[help.springActuator->input_start()] >= -maxSpringForce);
+}
+
+void HybridOptimization::addStateConstraints(DirectCollocation& dirCol, const StateHelper& help) {
+	auto x = dirCol.state();
+
+	double maxSpring = 0.1;		//SDF limits at 0.15. Needs further investigation - longer travel distance means more energy storage
+	double maxElbow = M_PI * 3.0/4.0;
+	dirCol.AddConstraintToAllKnotPoints(x[help.springJoint->position_start()] <= maxSpring);
+	dirCol.AddConstraintToAllKnotPoints(x[help.springJoint->position_start()] >= -maxSpring);
+	dirCol.AddConstraintToAllKnotPoints(x[help.elbowJoint->position_start()] <= maxElbow);
+	dirCol.AddConstraintToAllKnotPoints(x[help.elbowJoint->position_start()] >= -maxElbow);
+
+	if(help.pinJoint) {
+		double maxPin = M_PI / 2.0;
+		dirCol.AddConstraintToAllKnotPoints(x[help.pinJoint->position_start()] <= maxPin);
+		dirCol.AddConstraintToAllKnotPoints(x[help.pinJoint->position_start()] >= -maxPin);
+	}
 }
 
 void HybridOptimization::constrainStateToPos(drake::solvers::VectorXDecisionVariable state, Eigen::VectorXd pos) {
@@ -492,48 +560,56 @@ void HybridOptimization::constrainStateToPos(drake::solvers::VectorXDecisionVari
 }
 
 void HybridOptimization::linkAtContactStart2d(DirectCollocation& dirColFloating, DirectCollocation& dirColPinned) {
-	mp.AddConstraint(dirColFloating.final_state()[helpFloating->elbowJoint->position_start()] == dirColPinned.initial_state()[helpPinned->elbowJoint->position_start()]);
+	//A positive spring joint state retracts the spring when floating and extends it when pinned, so it must be negated when converting between robot configurations
+	//Same thing for elbow joint - when floating, it rotates about the +y, and when pinned, it rotates about the -y
+	mp.AddConstraint(dirColFloating.final_state()[helpFloating->elbowJoint->position_start()] == -dirColPinned.initial_state()[helpPinned->elbowJoint->position_start()]);
 	mp.AddConstraint(dirColFloating.final_state()[helpFloating->springJoint->position_start()] == -dirColPinned.initial_state()[helpPinned->springJoint->position_start()]);
 
-	//Planar floating joint rotates around -y axis. Elbow rotates around +y axis. Pin rotates around +y axis.
+	//Planar floating joint rotates around -y axis. Elbow rotates around +y axis (when floating). Pin rotates around +y axis.
 	//Could use CalcRelativeRotationMatrix, which would generalize to 3d, but it is more complex and its autodiff gradients are possibly bugged
 	symbolic::Expression touchdownAngle = -dirColFloating.final_state()[helpFloating->floatingJoint->position_start() + 2] + dirColFloating.final_state()[helpFloating->elbowJoint->position_start()];
 	mp.AddConstraint(touchdownAngle == dirColPinned.initial_state()[helpPinned->pinJoint->position_start()]);
 
-	//Velocities. Not physical. Needs impulse dynamics
-	mp.AddConstraint(dirColFloating.final_state()[helpFloating->elbowVelStateIndex()] == dirColPinned.initial_state()[helpPinned->elbowVelStateIndex()]);
-	mp.AddConstraint(dirColFloating.final_state()[helpFloating->springVelStateIndex()] == -dirColPinned.initial_state()[helpPinned->springVelStateIndex()]);
-	mp.AddConstraint(dirColPinned.initial_state()[helpPinned->pinVelStateIndex()] == 0.0);		//Extremely not physical
-
-	/*auto constraintFunc = [](AutoDiffVecXd combined) {
-		AutoDiffVecXd finalFloating = combined.head(helpFloating->stateSize());
-	};
-	AutoDiffVecXd combined(helpFloating->stateSize() + helpPinned->stateSize());
-	combined << dirColFloating.final_state(), dirColPinned.initial_state();
-	mp.AddConstraint(constraintFunc, combined);*/
-}
-
-void HybridOptimization::linkAtContactEnd2d(DirectCollocation& dirColPinned, DirectCollocation& dirColFloating) {
-	mp.AddConstraint(dirColPinned.final_state()[helpPinned->elbowJoint->position_start()] == dirColFloating.initial_state()[helpFloating->elbowJoint->position_start()]);
-	mp.AddConstraint(dirColPinned.final_state()[helpPinned->springJoint->position_start()] == -dirColFloating.initial_state()[helpFloating->springJoint->position_start()]);
-
-	//Ignoring world x position for now
-	mp.AddConstraint(dirColFloating.initial_state()[helpFloating->floatingJoint->position_start()] == 0.0);
-
-	symbolic::Expression planarAngle = dirColPinned.final_state()[helpPinned->elbowJoint->position_start()] - dirColPinned.final_state()[helpPinned->pinJoint->position_start()];
-	mp.AddConstraint(planarAngle == dirColFloating.initial_state()[helpFloating->floatingJoint->position_start() + 2]);
-
-	//A positive spring joint state retracts the spring when floating and extends it when pinned
-	//Currently just handling purely vertical case
-	mp.AddConstraint(dirColPinned.final_state()[helpPinned->springJoint->position_start()] + 0.4 == dirColFloating.initial_state()[helpFloating->floatingPzStateIndex()]);
+	//Set the one decision variable tracking the x world pos of the foot during the contact phase
+	//Adding this seems to have a nontrivial perf impact. I could manually write an expression, at least for the 2d case - would be good for verification and perf testing
+	mp.AddConstraint(make_shared<FramePosConstraint>(plantFloatingAd, plantContextFloatingAd, footFloatingAd, 0, false), {dirColFloating.final_state().head(sysFloating->plant->num_positions()), pinnedPosVars[&dirColPinned]});
 
 
 	//Velocities
-	mp.AddConstraint(dirColPinned.final_state()[helpPinned->elbowVelStateIndex()] == dirColFloating.initial_state()[helpFloating->elbowVelStateIndex()]);
+	//In 1d case, all velocity of the base link gets transferred to the prismatic joint
+	mp.AddConstraint(make_shared<ImpactConstraint>(plantFloatingAd, plantContextFloatingAd, *helpFloating, *helpPinned), {dirColFloating.final_state(), dirColPinned.initial_state()(Eigen::seqN(helpPinned->plant.num_positions(), helpPinned->plant.num_velocities()))});
+
+	//mp.AddConstraint(dirColFloating.final_state()[helpFloating->elbowVelStateIndex()] == -dirColPinned.initial_state()[helpPinned->elbowVelStateIndex()]);
+	//mp.AddConstraint(dirColFloating.final_state()[helpFloating->springVelStateIndex()] == -dirColPinned.initial_state()[helpPinned->springVelStateIndex()]);
+
+	//symbolic::Expression touchdownAngVel = -dirColFloating.final_state()[helpFloating->floatingVelStateIndex() + 2] + dirColFloating.final_state()[helpFloating->elbowVelStateIndex()];
+	//mp.AddConstraint(touchdownAngVel == dirColPinned.initial_state()[helpPinned->pinVelStateIndex()]);
+}
+
+void HybridOptimization::linkAtContactEnd2d(DirectCollocation& dirColPinned, DirectCollocation& dirColFloating) {
+	mp.AddConstraint(dirColPinned.final_state()[helpPinned->elbowJoint->position_start()] == -dirColFloating.initial_state()[helpFloating->elbowJoint->position_start()]);
+	mp.AddConstraint(dirColPinned.final_state()[helpPinned->springJoint->position_start()] == -dirColFloating.initial_state()[helpFloating->springJoint->position_start()]);
+
+	//Set world x position from pinned robot state and x pos of contact point
+	mp.AddConstraint(make_shared<FramePosConstraint>(plantPinnedAd, plantContextPinnedAd, basePinnedAd, 0, true), {dirColPinned.final_state().head(sysPinned->plant->num_positions()), pinnedPosVars[&dirColPinned], dirColFloating.initial_state()(Eigen::seqN(helpFloating->floatingJoint->position_start(), 1))});
+
+	symbolic::Expression planarAngle = -dirColPinned.final_state()[helpPinned->elbowJoint->position_start()] - dirColPinned.final_state()[helpPinned->pinJoint->position_start()];
+	mp.AddConstraint(planarAngle == dirColFloating.initial_state()[helpFloating->floatingJoint->position_start() + 2]);
+
+	//World z position
+	mp.AddConstraint(make_shared<FramePosConstraint>(plantPinnedAd, plantContextPinnedAd, basePinnedAd, 2, false), {dirColPinned.final_state().head(sysPinned->plant->num_positions()), dirColFloating.initial_state()(Eigen::seqN(helpFloating->floatingPzStateIndex(), 1))});
+	//mp.AddConstraint(dirColPinned.final_state()[helpPinned->springJoint->position_start()] + 0.4 == dirColFloating.initial_state()[helpFloating->floatingPzStateIndex()]);
+
+
+	//Velocities
+	mp.AddConstraint(dirColPinned.final_state()[helpPinned->elbowVelStateIndex()] == -dirColFloating.initial_state()[helpFloating->elbowVelStateIndex()]);
 	mp.AddConstraint(dirColPinned.final_state()[helpPinned->springVelStateIndex()] == -dirColFloating.initial_state()[helpFloating->springVelStateIndex()]);
 
-	//Vertical case only
-	mp.AddConstraint(dirColPinned.final_state()[helpPinned->springVelStateIndex()] == dirColFloating.initial_state()[helpFloating->floatingVzStateIndex()]);
-	mp.AddConstraint(dirColFloating.initial_state()[helpFloating->floatingVelStateIndex()] == 0.0);
-	mp.AddConstraint(dirColFloating.initial_state()[helpFloating->floatingVelStateIndex() + 2] == 0.0);		//Zero angular vel
+	//World x and z velocities
+	mp.AddConstraint(make_shared<TakeoffBaseVelConstraint>(plantPinnedAd, plantContextPinnedAd), {dirColPinned.final_state(), dirColFloating.initial_state()(Eigen::seqN(helpFloating->floatingVelStateIndex(), 2))});
+	//mp.AddConstraint(dirColPinned.final_state()[helpPinned->springVelStateIndex()] == dirColFloating.initial_state()[helpFloating->floatingVzStateIndex()]);
+	//mp.AddConstraint(dirColFloating.initial_state()[helpFloating->floatingVelStateIndex()] == 0.0);
+
+	symbolic::Expression planarAngVel = -dirColPinned.final_state()[helpPinned->elbowVelStateIndex()] - dirColPinned.final_state()[helpPinned->pinVelStateIndex()];
+	mp.AddConstraint(planarAngVel == dirColFloating.initial_state()[helpFloating->floatingVelStateIndex() + 2]);
 }
