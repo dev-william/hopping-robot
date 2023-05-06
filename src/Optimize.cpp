@@ -324,7 +324,8 @@ void HybridOptimization::createProblem(Eigen::VectorXd initialPos, Eigen::Vector
 		Traj pinnedGuess = guesser.makeContactGuess(i, *helpPinned);
 		shared_ptr<DirectCollocation> dirColPinned = setupPinned(pinnedGuess, timeVariation);
 		dirColsPinned.push_back(dirColPinned);
-		createPinnedPosVars(dirColPinned.get());
+		Eigen::VectorXd pinPosGuess = flightGuess.x.value(flightGuess.x.end_time())(Eigen::seqN(helpFloating->floatingJoint->position_start(), 1), 0);
+		createPinnedPosVars(dirColPinned.get(), pinPosGuess);
 
 		linkAtContactStart2d(*dirColFloating, *dirColPinned);
 	}
@@ -355,6 +356,7 @@ void HybridOptimization::solve() {
 	std::cout << "Solver: " << res.get_solver_id().name() << "\n";
 	solvers::SnoptSolverDetails snoptDetails = res.get_solver_details<solvers::SnoptSolver>();
 	std::cout << "SNOPT info code: " << snoptDetails.info << "\n";
+	std::cout << "Optimal cost: " << res.get_optimal_cost() << "\n";
 	if(!res.is_success()) {
 		auto infeasibleConstraints = res.GetInfeasibleConstraints(mp);
 		std::cout << "Num infeasible constraints: " << infeasibleConstraints.size() << "\n";
@@ -447,7 +449,6 @@ std::shared_ptr<DirectCollocation> HybridOptimization::setupFloating(const Traj&
 	addStateConstraints(*dirCol, *helpFloating);
 	dirCol->SetInitialTrajectory(guess.u, guess.x);
 
-	//Todo: remove vertical assumption
 	for(int i = 0; i < numTimeSamples; ++i) {
 		if(i == 0)		//Already constrained when applicable
 			continue;
@@ -468,7 +469,6 @@ std::shared_ptr<DirectCollocation> HybridOptimization::setupFloating(const Traj&
 		}
 		else {
 			mp.AddConstraint(heightOffGround >= 0.00001);		//Apparently just ">" is not allowed
-			//Todo: saw a note online saying constant factors should be baked into the constraint bounds for SNOPT
 		}
 	}
 
@@ -491,7 +491,7 @@ std::shared_ptr<DirectCollocation> HybridOptimization::setupPinned(const Traj& g
 
 	//Normal force cannot be negative
 	//f_N = (-kx + u) * cos(pin) + F_g,foot
-	//Missing component from elbow moment?
+	//Missing component from force perpendicular to spring axis?
 	//Damping force ignored.
 	double k = helpPinned->findSpring()->stiffness();
 	double footMass = 0.3;		//Todo: get constants like this from MultibodyPlant
@@ -518,13 +518,14 @@ std::shared_ptr<DirectCollocation> HybridOptimization::setupPinned(const Traj& g
 //This way splits that constraint into two, which seems like it should be easier to think about
 //The main advantage is that contact positions can be constrained directly
 //Must be called before the link constraints are added
-void HybridOptimization::createPinnedPosVars(DirectCollocation* dirCol) {
+void HybridOptimization::createPinnedPosVars(DirectCollocation* dirCol, Eigen::VectorXd guess) {
 	pinnedPosVars[dirCol] = mp.NewContinuousVariables(1, "horz pinned");
+	mp.SetInitialGuess(pinnedPosVars[dirCol], guess);
 }
 
 void HybridOptimization::addInputConstraints(DirectCollocation& dirCol, const StateHelper& help) {
 	auto u = dirCol.input();
-	dirCol.AddRunningCost(10.0 * u[0] * u[0]);
+	dirCol.AddRunningCost(10.0 * u[0] * u[0]);		//Todo: this is biased to add cost to the longer phases, since the timesteps are more spread out in time
 	dirCol.AddRunningCost(10.0 * u[1] * u[1]);
 
 	double maxElbowTorque = 5.0;

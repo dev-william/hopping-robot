@@ -95,7 +95,7 @@ private:
 
 	std::shared_ptr<drake::planning::trajectory_optimization::DirectCollocation> setupFloating(const Traj& guess, double timeVariationPercent, bool isFinal);
 	std::shared_ptr<drake::planning::trajectory_optimization::DirectCollocation> setupPinned(const Traj& guess, double timeVariationPercent);
-	void createPinnedPosVars(drake::planning::trajectory_optimization::DirectCollocation* dirCol);
+	void createPinnedPosVars(drake::planning::trajectory_optimization::DirectCollocation* dirCol, Eigen::VectorXd guess);
 	static void addInputConstraints(drake::planning::trajectory_optimization::DirectCollocation& dirCol, const StateHelper& help);
 	static void addStateConstraints(drake::planning::trajectory_optimization::DirectCollocation& dirCol, const StateHelper& help);
 	void constrainStateToPos(drake::solvers::VectorXDecisionVariable state, Eigen::VectorXd pos);		//Assumes 2d and floating. Zeroes all velocities

@@ -16,7 +16,7 @@ void playTrajectory(trajectories::PiecewisePolynomial<double>& stateTraj, RobotS
 	std::unique_ptr<systems::Context<double>> diagramContext = sys.diagram->CreateDefaultContext();
 	systems::Context<double>& plantContext = sys.diagram->GetMutableSubsystemContext(*sys.plant, diagramContext.get());
 
-	double playbackFrameTime = 0.033;
+	double playbackFrameTime = 0.016;
 	int frameCount = (int) std::round((stateTraj.end_time() - stateTraj.start_time()) / rate / playbackFrameTime);
 	for(int i = 0; i < frameCount; ++i) {
 		double t = ((double) i / (double) frameCount) * (stateTraj.end_time() - stateTraj.start_time()) + stateTraj.start_time();
@@ -26,7 +26,7 @@ void playTrajectory(trajectories::PiecewisePolynomial<double>& stateTraj, RobotS
 		sys.diagram->ForcedPublish(*diagramContext);
 		double z = pos[1];
 		//std::cout << z << "\n";
-		std::this_thread::sleep_for(chrono::milliseconds(33));		//Drake visualizer does not have anything built in for animations
+		std::this_thread::sleep_for(chrono::milliseconds(16));		//Drake visualizer does not have anything built in for animations
 		if(i == 0) {
 			std::this_thread::sleep_for(chrono::seconds(3));
 		}
@@ -69,15 +69,21 @@ void plotTraj(const Traj& traj, const StateHelper& help) {
 		elbowInput.push_back(sample[help.elbowActuator->input_start()]);
 	}
 
-	plt::plot(breaksX, z, {{"label", "z"}});
-	plt::plot(breaksX, spring, {{"label", "spring"}});
-	plt::plot(breaksX, normalForce, {{"label", "normal force / 100"}});
-	plt::plot(breaksX, footHeight, {{"label", "foot height"}});
-	plt::plot(breaksX, x, {{"label", "x"}});
-	plt::plot(breaksX, planarAngle, {{"label", "Planar angle"}});
+	plt::plot(breaksX, x, {{"label", "Base x"}});
+	plt::plot(breaksX, z, {{"label", "Base z"}});
+	//plt::plot(breaksX, spring, {{"label", "Spring retraction"}});
+	//plt::plot(breaksX, normalForce, {{"label", "normal force / 100"}});
+	plt::plot(breaksX, footHeight, {{"label", "Foot height"}});
+	//plt::plot(breaksX, planarAngle, {{"label", "Planar angle"}});
 	plt::legend();
+	plt::ylabel("Position (m)");
+	plt::xlabel("Time (s)");
 	plt::show();
 	
-	plt::plot(breaksU, springInput);
+	plt::plot(breaksU, springInput, {{"label", "Spring input"}});
+	//plt::plot(breaksU, elbowInput, {{"label", "Elbow input"}});
+	//plt::legend();
+	plt::ylabel("Spring force (N)");
+	plt::xlabel("Time (s)");
 	plt::show();
 }

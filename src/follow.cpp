@@ -32,7 +32,7 @@ int main() {
 	sys.plant->SetPositionsAndVelocities(sys.plantContext, initialState);
 
 	systems::Simulator<double> sim(*sys.diagram, std::move(sys.diagramContext));
-	sim.set_target_realtime_rate(0.5);
+	sim.set_target_realtime_rate(0.1);
 	sim.Initialize();
 	sim.AdvanceTo(inputTraj.end_time());
 

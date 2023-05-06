@@ -22,7 +22,7 @@ int main() {
 	sys.finalize();
 	StateHelper help(*sys.plant);
 
-	playTrajectory(loaded.x, sys, 0.02);
+	playTrajectory(loaded.x, sys, 0.05);
 
-	plotTraj(loaded, help);
+	//plotTraj(loaded, help);
 }

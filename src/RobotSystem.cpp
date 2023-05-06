@@ -10,6 +10,9 @@
 using namespace drake;
 using namespace math;
 
+//If don't need a sceneGraph, it's apparently possible to create a plant without a diagram
+//See https://github.com/RobotLocomotion/drake/blob/master/multibody/plant/test/kuka_iiwa_model_tests.h
+
 RobotSystem::RobotSystem(double timestep, bool use3d, bool less_collision, bool pinned, bool addSceneGraph) {
 	if(addSceneGraph)
 		sceneGraph = builder.AddSystem<geometry::SceneGraph>();

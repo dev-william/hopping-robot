@@ -10,7 +10,7 @@
 //but it's slightly cursed and you still have to define a class anyways.
 
 //PositionConstraint is a good example of a multibody constraint
-//Only providing the autodiff definitions since that's all SNOPT uses
+//Only providing the autodiff definitions since that's all SNOPT uses. Double hacked on so that the constraint infeasibility check works when SNOPT fails.
 //Todo: test autodiff gradients with finite difference
 
 typedef Eigen::Matrix<AutoDiffd<Eigen::Dynamic>, Eigen::Dynamic, Eigen::Dynamic> AutoDiffMatXd;
@@ -41,7 +41,10 @@ protected:
 	}
 
 	void DoEval(const Eigen::Ref<const Eigen::VectorXd>& x, Eigen::VectorXd* y) const override {
-		throw std::logic_error("FramePosConstraint does not support Eval with double, only autodiff");
+		AutoDiffVecXd yAd = AutoDiffVecXd::Zero(y->size());
+		AutoDiffVecXd xAd(x);
+		DoEval(xAd, &yAd);
+		*y = math::ExtractValue(yAd);
 	}
 
 	void DoEval(const Eigen::Ref<const drake::VectorX<drake::symbolic::Variable>>&, drake::VectorX<drake::symbolic::Expression>*) const override {
@@ -78,7 +81,10 @@ protected:
 	}
 
 	void DoEval(const Eigen::Ref<const Eigen::VectorXd>& x, Eigen::VectorXd* y) const override {
-		throw std::logic_error("TakeoffBaseVelConstraint does not support Eval with double, only autodiff");
+		AutoDiffVecXd yAd = AutoDiffVecXd::Zero(y->size());
+		AutoDiffVecXd xAd(x);
+		DoEval(xAd, &yAd);
+		*y = math::ExtractValue(yAd);
 	}
 
 	void DoEval(const Eigen::Ref<const drake::VectorX<drake::symbolic::Variable>>&, drake::VectorX<drake::symbolic::Expression>*) const override {
@@ -146,7 +152,10 @@ protected:
 	}
 
 	void DoEval(const Eigen::Ref<const Eigen::VectorXd>& x, Eigen::VectorXd* y) const override {
-		throw std::logic_error("TakeoffBaseVelConstraint does not support Eval with double, only autodiff");
+		AutoDiffVecXd yAd = AutoDiffVecXd::Zero(y->size());
+		AutoDiffVecXd xAd(x);
+		DoEval(xAd, &yAd);
+		*y = math::ExtractValue(yAd);
 	}
 
 	void DoEval(const Eigen::Ref<const drake::VectorX<drake::symbolic::Variable>>&, drake::VectorX<drake::symbolic::Expression>*) const override {
