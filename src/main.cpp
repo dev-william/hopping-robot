@@ -16,7 +16,7 @@
 #include "Optimize.h"
 #include "Utils.h"
 
-//Command for launching "Meldis" - works with Drake Visualizer API. Maybe I'm supposed to use Meshcat directly?
+//Command for launching "Meldis" - works with Drake Visualizer API.
 //env PYTHONPATH=${PYTHONPATH}:/opt/drake/lib/python3.10/site-packages python3 -m pydrake.visualization.meldis -w
 
 using namespace std;
@@ -33,8 +33,6 @@ int main() {
 	sys.plantFinalize();
 	sys.addZeroInput();
 
-	//std::shared_ptr<geometry::Meshcat> meshcat = std::make_shared<geometry::Meshcat>();
-	//auto& viz = geometry::MeshcatVisualizer<double>::AddToBuilder(&builder, sceneGraph, meshcat);
 	geometry::DrakeVisualizer<double> viz;
 	viz.AddToBuilder(&sys.builder, *sys.sceneGraph);
 
@@ -44,15 +42,20 @@ int main() {
 	StateHelper help(*sys.plant);
 
 
-	bool allowVariableTime = true;
 	HybridOptimization hybrid;
-	hybrid.createProblem(Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.1, 0.45}}, 2, allowVariableTime);
+
+	/*
+	 * Problem setup
+	 */
+	bool allowVariableTime = true;
+	int numContacts = 2;
+	hybrid.createProblem(Eigen::VectorXd{{0.0, 0.45}}, Eigen::VectorXd{{0.1, 0.45}}, numContacts, allowVariableTime);
+
 	hybrid.solve();
 	Traj optResult = hybrid.reconstructFullTraj();
 	trajectories::PiecewisePolynomial<double> stateTraj = optResult.x;
 	cout << "Trajectory duration: " << optResult.x.end_time() << " s\n";
 
-	//trajectories::PiecewisePolynomial<double> stateTraj = optimizeOverScene();
 	//FootstepGuesser guesser(Eigen::VectorXd{{0.0, 0.55}}, Eigen::VectorXd{{0.5, 0.55}}, 2.0);
 	//Traj initialGuess = guesser.makeFullGuess(false, help);
 	//trajectories::PiecewisePolynomial<double> stateTraj = initialGuess.x;
